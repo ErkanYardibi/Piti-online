@@ -1,0 +1,71 @@
+-- Real RLS/service RPC integration assertions; every fixture is rolled back.
+begin;
+create temporary table fixture(k text primary key,id uuid default gen_random_uuid(),sid uuid default gen_random_uuid(),op uuid);
+insert into fixture(k) values('pt'),('pt2'),('member'),('member2'),('new_member'),('client'),('client2'),('manual');
+grant all on fixture to authenticated,service_role;
+insert into auth.users(id,email,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,encrypted_password)
+select id,k||'@managed-test.invalid',now(),jsonb_build_object('account_role',case when k in ('pt','pt2') then 'pt' else 'member' end,'must_change_password',k='new_member'),'{"full_name":"Test user"}',extensions.crypt('TemporaryTest!1234',extensions.gen_salt('bf'))
+from fixture where k in ('pt','pt2','member','member2','new_member');
+insert into auth.sessions(id,user_id,created_at,updated_at) select sid,id,now(),now() from fixture where k in ('pt','pt2','member','member2','new_member');
+insert into public.clients(id,pt_id,user_id,full_name,email)
+values((select id from fixture where k='client'),(select id from fixture where k='pt'),(select id from fixture where k='member'),'Member','member@managed-test.invalid'),
+((select id from fixture where k='client2'),(select id from fixture where k='pt2'),(select id from fixture where k='member2'),'Member 2','member2@managed-test.invalid'),
+((select id from fixture where k='manual'),(select id from fixture where k='pt'),null,'New member','new_member@managed-test.invalid');
+create function pg_temp.assert_true(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'TEST FAILED: %',label; end if; end$$;
+create function pg_temp.expect_error(q text,needle text) returns void language plpgsql as $$begin begin execute q; exception when others then if position(needle in sqlerrm)>0 then return; end if; raise; end; raise exception 'TEST FAILED: expected error %',needle; end$$;
+create function pg_temp.login(k text) returns text language sql as $$select set_config('request.jwt.claims',jsonb_build_object('sub',id,'session_id',sid,'role','authenticated')::text,true) from fixture where fixture.k=login.k$$;
+set local role authenticated;
+select pg_temp.login('member');
+select pg_temp.assert_true((public.account_context()->>'role')='member','immutable role is member');
+select pg_temp.expect_error('update public.profiles set role=''pt'' where id=auth.uid()','değiştirilemez');
+select pg_temp.expect_error('update public.profiles set must_change_password=true where id=auth.uid()','değiştirilemez');
+select pg_temp.expect_error('select public.managed_account_begin(auth.uid(),gen_random_uuid(),''reset'')','permission denied');
+select pg_temp.assert_true((select count(*)=1 from public.clients),'member sees only own client');
+insert into public.messages(client_id,sender_id,body) select id,auth.uid(),'Only my PT sees this' from fixture where k='client';
+select pg_temp.expect_error(format('insert into public.messages(client_id,sender_id,body) values(%L,auth.uid(),''Wrong recipient'')',(select id from fixture where k='client2')),'row-level security');
+select pg_temp.expect_error(format('insert into public.messages(client_id,sender_id,body) values(%L,%L,''Forged PT'')',(select id from fixture where k='client'),(select id from fixture where k='pt')),'değiştirilemez');
+select pg_temp.assert_true((select sender_role='member' from public.messages limit 1),'sender role assigned by server');
+select pg_temp.login('member2');
+select pg_temp.assert_true((select count(*)=0 from public.messages),'other member cannot read messages');
+select pg_temp.login('pt2');
+select pg_temp.assert_true((select count(*)=0 from public.messages),'other PT cannot read messages');
+select pg_temp.login('pt');
+select pg_temp.assert_true((select count(*)=1 from public.messages),'own PT sees message');
+insert into public.messages(client_id,sender_id,body) select id,auth.uid(),'PT response' from fixture where k='client';
+select pg_temp.expect_error(format('insert into public.messages(client_id,sender_id,body) values(%L,auth.uid(),''Other PT client'')',(select id from fixture where k='client2')),'row-level security');
+update public.messages set read_at=now() where sender_id<>auth.uid();
+select pg_temp.assert_true((select read_at is not null from public.messages where body='Only my PT sees this'),'recipient read receipt');
+select pg_temp.expect_error('update public.messages set body=''Rewritten''','permission denied');
+select pg_temp.login('new_member');
+select pg_temp.assert_true((public.account_context()->>'must_change_password')::boolean,'temporary password gated');
+select pg_temp.assert_true((select count(*)=0 from public.clients),'gated account reads no client data');
+select pg_temp.expect_error(format('select public.save_client_history(%L,''{}'',0)',(select id from fixture where k='manual')),'kendi şifreni');
+reset role;
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select pg_temp.expect_error(format('select public.managed_account_begin(%L,%L,''create'')',(select id from fixture where k='member'),(select id from fixture where k='manual')),'kendi aktif');
+select pg_temp.expect_error(format('select public.managed_account_begin(%L,%L,''create'')',(select id from fixture where k='pt2'),(select id from fixture where k='manual')),'kendi aktif');
+update fixture set op=(public.managed_account_begin((select id from fixture where k='pt'),id,'create')->>'operation_id')::uuid where k='manual';
+select pg_temp.expect_error(format('select public.managed_account_begin(%L,%L,''create'')',(select id from fixture where k='pt'),(select id from fixture where k='manual')),'bir işlem sürüyor');
+select public.managed_account_finish((select op from fixture where k='manual'),(select id from fixture where k='new_member'),repeat('a',64));
+select pg_temp.assert_true((public.consume_entry_link(repeat('a',64))->>'user_id')=(select id::text from fixture where k='new_member'),'one-time entry targets correct user');
+select pg_temp.expect_error('select public.consume_entry_link(repeat(''a'',64))','geçersiz');
+select pg_temp.assert_true(not public.check_new_password((select id from fixture where k='new_member'),'TemporaryTest!1234'),'same temporary password rejected');
+select pg_temp.assert_true(public.check_new_password((select id from fixture where k='new_member'),'MyOwnNewPassword!123'),'new password accepted');
+update fixture set op=(public.managed_account_begin((select id from fixture where k='new_member'),id,'password')->>'operation_id')::uuid where k='manual';
+select public.managed_account_finish((select op from fixture where k='manual'),(select id from fixture where k='new_member'));
+reset role;
+select pg_temp.assert_true((select not must_change_password from public.profiles where id=(select id from fixture where k='new_member')),'password gate cleared by server');
+select pg_temp.assert_true((select count(*)=0 from auth.sessions where user_id=(select id from fixture where k='new_member')),'old temporary sessions invalidated');
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+update fixture set op=(public.managed_account_begin((select id from fixture where k='pt'),id,'reset')->>'operation_id')::uuid where k='client';
+select public.managed_account_finish((select op from fixture where k='client'),(select id from fixture where k='member'),repeat('b',64));
+set local role authenticated;
+select pg_temp.login('member');
+select pg_temp.assert_true(not (public.account_context()->>'session_valid')::boolean,'reset invalidates prior session');
+select pg_temp.assert_true((select count(*)=0 from public.messages),'reset session cannot read messages');
+select pg_temp.login('pt');
+select pg_temp.assert_true((select count(*)=1 from public.account_audit where action='reset_completed'),'PT sees reset audit');
+select 'Managed account and message isolation assertions passed' as result;
+rollback;

@@ -1,20 +1,20 @@
 -- Integration test: all fixtures and actions roll back; no email is sent.
 begin;
-create temporary table fixture(k text primary key,id uuid default gen_random_uuid(),code text);
+create temporary table fixture(k text primary key,id uuid default gen_random_uuid(),sid uuid default gen_random_uuid(),code text);
 insert into fixture(k) values('pt'),('other_pt'),('member'),('wrong_email'),('unverified'),('client'),('shell');
 grant all on fixture to authenticated;
-insert into auth.users(id,email,email_confirmed_at)
- select id,k||'@piti-test.invalid',case when k='unverified' then null else now() end from fixture where k in ('pt','other_pt','member','wrong_email','unverified');
-insert into public.profiles(id,role,full_name) select id,case when k in ('pt','other_pt') then 'pt' else 'member' end,k from fixture where k in ('pt','other_pt','member','wrong_email','unverified');
+insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+ select id,k||'@piti-test.invalid',case when k='unverified' then null else now() end,jsonb_build_object('account_type',case when k in ('pt','other_pt') then 'pt' else 'member' end) from fixture where k in ('pt','other_pt','member','wrong_email','unverified');
+insert into auth.sessions(id,user_id,created_at,updated_at) select sid,id,now(),now() from fixture where k in ('pt','other_pt','member','wrong_email','unverified');
 insert into public.clients(id,pt_id,full_name,email) select id,(select id from fixture where k='pt'),'Existing client','member@piti-test.invalid' from fixture where k='client';
 insert into public.clients(id,user_id,full_name,email) select id,(select id from fixture where k='member'),'Empty shell','member@piti-test.invalid' from fixture where k='shell';
 insert into public.sessions(client_id,pt_id,starts_at,status) values((select id from fixture where k='client'),(select id from fixture where k='pt'),now()-interval '1 day','completed');
 create function pg_temp.assert_true(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'TEST FAILED: %',label; end if; end$$;
 create function pg_temp.expect_error(q text,needle text) returns void language plpgsql as $$begin begin execute q; exception when others then if position(needle in sqlerrm)>0 then return; end if; raise; end; raise exception 'TEST FAILED: expected error %',needle; end$$;
 set local role authenticated;
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='other_pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='other_pt'),true);
 select pg_temp.expect_error(format('select public.create_client_invitation(%L)',(select id from fixture where k='client')),'oluşturamazsın');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='pt'),true);
 select public.save_client_history((select id from fixture where k='client'),'{"package":{"name":"Old package"},"progressData":[{"w":90}],"financeHistory":[{"text":"Old payment"}]}',0);
 update fixture set code=public.create_client_invitation(id)->>'code' where k='client';
 select pg_temp.assert_true(length((select code from fixture where k='client'))=37,'128-bit code');
@@ -23,27 +23,27 @@ select pg_temp.expect_error(format('select public.save_client_history(%L,%L,0)',
 -- Rotation invalidates old code.
 insert into fixture(k,code) select 'old_code',code from fixture where k='client';
 update fixture set code=public.create_client_invitation(id)->>'code' where k='client';
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='member'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='member'),true);
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='old_code')),'geçersiz');
 select pg_temp.assert_true((select count(*)=0 from public.client_history),'unlinked account cannot read history');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='wrong_email'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='wrong_email'),true);
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='client')),'başka bir e-posta');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='unverified'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='unverified'),true);
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='client')),'doğrula');
 -- Expired and revoked codes fail.
 reset role;
 update public.client_invitations set expires_at=now()-interval '1 second' where client_id=(select id from fixture where k='client');
 set local role authenticated;
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='member'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='member'),true);
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='client')),'geçersiz');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='pt'),true);
 update fixture set code=public.create_client_invitation(id)->>'code' where k='client';
 select public.revoke_client_invitation((select id from fixture where k='client'));
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='member'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='member'),true);
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='client')),'geçersiz');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='pt'),true);
 update fixture set code=public.create_client_invitation(id)->>'code' where k='client';
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='member'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='member'),true);
 select pg_temp.assert_true(public.redeem_client_invitation((select code from fixture where k='client'))=(select id from fixture where k='client'),'keeps original client ID');
 select pg_temp.assert_true((select count(*)=1 from public.sessions where client_id=(select id from fixture where k='client')),'old session visible');
 select pg_temp.assert_true((select data#>>'{package,name}'='Old package' from public.client_history where client_id=(select id from fixture where k='client')),'old package visible');
@@ -51,10 +51,10 @@ select pg_temp.assert_true((select count(*)=1 from public.clients where user_id=
 select pg_temp.expect_error(format('select public.redeem_client_invitation(%L)',(select code from fixture where k='client')),'geçersiz');
 select pg_temp.expect_error(format('update public.clients set pt_id=null where id=%L',(select id from fixture where k='client')),'yalnızca müşteri davetiyle');
 select pg_temp.expect_error(format('select public.save_client_history(%L,%L,1)',(select id from fixture where k='client'),'{"package":{"name":"hacked"}}'),'yalnızca PT');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='pt'),true);
 select pg_temp.expect_error(format('update public.clients set user_id=null where id=%L',(select id from fixture where k='client')),'yalnızca müşteri davetiyle');
 select pg_temp.expect_error(format('select public.create_client_invitation(%L)',(select id from fixture where k='client')),'zaten bağlı');
-select set_config('request.jwt.claim.sub',(select id::text from fixture where k='other_pt'),true);
+select set_config('request.jwt.claims',(select jsonb_build_object('sub',id,'role','authenticated','session_id',sid)::text from fixture where k='other_pt'),true);
 select pg_temp.assert_true((select count(*)=0 from public.client_history),'other PT cannot see history');
 select 'All invitation integration assertions passed' as result;
 rollback;
