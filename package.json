@@ -1,0 +1,18 @@
+{
+  "name": "piti-online",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/app.js --bundle --minify --outfile=app.bundle.js",
+    "test": "node --test tests/*.test.js",
+    "format": "prettier --write src tests/*.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.116.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.25.12",
+    "prettier": "3.6.2"
+  }
+}
