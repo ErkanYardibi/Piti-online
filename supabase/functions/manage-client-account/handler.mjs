@@ -39,7 +39,7 @@ export function createHandler({url,serviceKey,fetchImpl=fetch,cryptoImpl=crypto}
    if(!access.session_valid)return reply(401,{error:'Oturumun sona erdi. Yeniden giriş yap.'});
    if(!['create','reset','password'].includes(body.action))return reply(400,{error:'Geçersiz işlem.'});
    const password=body.password;
-   if(typeof password!=='string'||password.length<12||new TextEncoder().encode(password).length>64)return reply(400,{error:'Şifre en az 12 karakter, en fazla 64 bayt olmalı.'});
+   if(typeof password!=='string'||password.length<6||new TextEncoder().encode(password).length>64)return reply(400,{error:'Şifre en az 6 karakter, en fazla 64 bayt olmalı.'});
    let clientId=body.client_id;
    if(body.action==='password'){
     if(access.role!=='member'||!access.must_change_password)return reply(403,{error:'Bu hesap için zorunlu şifre değişimi bulunmuyor.'});

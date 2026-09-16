@@ -28,3 +28,9 @@ test('entry exchange consumes token before minting a session and does not send m
 test('mandatory password completion targets authenticated member, ignoring supplied client or user',async()=>{const h=harness({role:'member',required:true});const r=await h.call({action:'password',client_id:pt,user_id:pt,password:'MyPersonalPassword!'});assert.equal(r.status,200);assert.ok(h.calls.some(x=>x.path==='/auth/v1/admin/users/'+member&&x.method==='PUT'));assert.equal(h.calls.find(x=>x.path.endsWith('managed_account_begin')).body.p_client,client)});
 test('same temporary password cannot complete first login',async()=>{const h=harness({role:'member',required:true,samePassword:true});assert.equal((await h.call({action:'password',password:'TemporaryPassword!'})).status,400);assert.ok(!h.calls.some(x=>x.method==='PUT'))});
 test('untrusted origins and oversized payloads rejected',async()=>{const h=harness();assert.equal((await h.call({action:'create'},'actor-token','https://evil.invalid')).status,403);assert.equal((await h.call({action:'create',password:'x'.repeat(9000)})).status,413);assert.equal(h.calls.length,0)});
+
+for(const action of ['create','reset','password'])test(action+' accepts six characters and rejects five before mutation',async()=>{
+ const options=action==='password'?{role:'member',required:true}:{};
+ const short=harness(options);assert.equal((await short.call({action,client_id:client,password:'Ab12!'})).status,400);assert.ok(!short.calls.some(x=>x.path.includes('admin/users')||x.path.endsWith('managed_account_begin')));
+ const valid=harness(options);assert.equal((await valid.call({action,client_id:client,password:'Ab12!x'})).status,200);
+});
