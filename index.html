@@ -192,14 +192,48 @@ async function loadCloudData(){
 }
 function setAuthBusy(busy){document.querySelectorAll('#authForm button,#authForm input,#authForm select').forEach(x=>x.disabled=busy)}
 function authMessage(message){document.querySelector('#authError').textContent=message||''}
-async function activateSession(session){authUser=session.user;document.querySelector('#authBack').hidden=true;document.querySelector('#roleSeg').hidden=true;document.querySelector('#resetBtn').hidden=true;let badge=document.querySelector('#cloudBadge');if(!badge){badge=document.createElement('span');badge.id='cloudBadge';badge.className='cloudBadge';badge.textContent='Buluta bağlı';document.querySelector('.userbox').prepend(badge);const out=document.createElement('button');out.className='pill';out.id='logoutBtn';out.textContent='Çıkış';out.onclick=()=>db.auth.signOut();document.querySelector('.userbox').append(out)}await loadCloudData()}
+let sessionActivation=null;
+function activateSession(session){
+ if(sessionActivation)return sessionActivation;
+ sessionActivation=(async()=>{
+  demoMode=false;authUser=session.user;setAuthBusy(true);authMessage('Hesabın yükleniyor…');
+  try{
+   await loadCloudData();
+   document.querySelector('#authBack').hidden=true;
+   document.querySelector('#roleSeg').hidden=true;
+   document.querySelector('#resetBtn').hidden=true;
+   let badge=document.querySelector('#cloudBadge');
+   if(!badge){badge=document.createElement('span');badge.id='cloudBadge';badge.className='cloudBadge';document.querySelector('.userbox').prepend(badge)}
+   badge.textContent='Buluta bağlı';
+   if(!document.querySelector('#logoutBtn')){const out=document.createElement('button');out.className='pill';out.id='logoutBtn';out.textContent='Çıkış';out.onclick=async()=>{try{const {error}=await db.auth.signOut();if(error)throw error}catch(error){toast('Çıkış yapılamadı: '+error.message)}};document.querySelector('.userbox').append(out)}
+   authMessage('');
+  }catch(error){authUser=null;document.querySelector('#authBack').hidden=false;authMessage('Hesap yüklenemedi: '+error.message)}
+  finally{setAuthBusy(false)}
+ })().finally(()=>{sessionActivation=null});
+ return sessionActivation;
+}
 async function initAuth(){
- if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
- const {data}=await db.auth.getSession();if(data.session){try{await activateSession(data.session)}catch(error){document.querySelector('#authBack').hidden=false;authMessage(error.message)}}
- db.auth.onAuthStateChange(async(event,session)=>{if(event==='SIGNED_OUT'){authUser=null;location.reload()}else if(session&&!authUser){try{await activateSession(session)}catch(error){authMessage(error.message)}}});
- document.querySelector('#authForm').onsubmit=async e=>{e.preventDefault();setAuthBusy(true);authMessage('');const {error}=await db.auth.signInWithPassword({email:document.querySelector('#authEmail').value.trim(),password:document.querySelector('#authPassword').value});if(error)authMessage(error.message);setAuthBusy(false)};
- document.querySelector('#signUpBtn').onclick=async()=>{const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;if(!name||!email||password.length<6)return authMessage('Ad soyad, e-posta ve en az 6 karakterli şifre gerekli.');localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));setAuthBusy(true);const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name:name,account_type:role}}});if(error)authMessage(error.message);else if(!data.session)authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.');setAuthBusy(false)};
  document.querySelector('#demoBtn').onclick=()=>{demoMode=true;document.querySelector('#authBack').hidden=true};
+ if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
+ // Supabase calls must run after the auth callback releases its session lock.
+ db.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_OUT'){authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
+  else if(session&&!authUser)setTimeout(()=>{if(!authUser)activateSession(session)},0);
+ });
+ document.querySelector('#authForm').onsubmit=async e=>{
+  e.preventDefault();setAuthBusy(true);authMessage('');
+  try{const {data,error}=await db.auth.signInWithPassword({email:document.querySelector('#authEmail').value.trim(),password:document.querySelector('#authPassword').value});if(error)throw error;if(data.session)await activateSession(data.session)}
+  catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
+ };
+ document.querySelector('#signUpBtn').onclick=async()=>{
+  const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;
+  if(!name||!email||password.length<6)return authMessage('Ad soyad, e-posta ve en az 6 karakterli şifre gerekli.');
+  setAuthBusy(true);authMessage('');
+  try{localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name:name,account_type:role}}});if(error)throw error;if(data.session)await activateSession(data.session);else authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.')}
+  catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
+ };
+ try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data.session)await activateSession(data.session)}
+ catch(error){authMessage('Oturum kontrol edilemedi: '+error.message)}
 }
 function packageEnd(pkg){return pkg?.expireDate||pkg?.end||''}
 function packageEndLabel(pkg=state.package){const end=packageEnd(pkg);return end?new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric'}).format(new Date(end+'T12:00:00')):'—'}
