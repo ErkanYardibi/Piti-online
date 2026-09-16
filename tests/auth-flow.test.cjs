@@ -7,7 +7,7 @@ const code=html.slice(html.indexOf('function setAuthBusy'),html.indexOf('functio
 function setup({missingClient=false,loadError=false,sessionError=false,loginError=false}={}){
  const nodes=new Map(),timers=[];let callback,locked=false,loads=0;
  const node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,disabled:false,value:id==='#authPassword'?'password123':id==='#authRole'?'pt':'test@example.invalid',textContent:''});return nodes.get(id)};
- const ctx={authUser:null,cloudSyncTimer:null,demoMode:false,setTimeout:fn=>timers.push(fn),clearTimeout(){},location:{reload(){}},localStorage:{setItem(){}},toast(){},
+ const ctx={authUser:null,cloudSyncTimer:null,demoMode:false,setTimeout:fn=>timers.push(fn),clearTimeout(){},location:{reload(){}},localStorage:{setItem(){}},sessionStorage:{getItem(){return null}},toast(){},
  document:{querySelector(id){if(['#cloudBadge','#logoutBtn'].includes(id))return nodes.get(id)||null;if(id==='.userbox')return {prepend(el){nodes.set('#'+el.id,el)},append(el){nodes.set('#'+el.id,el)}};return node(id)},querySelectorAll(){return [node('#signUpBtn'),node('#authEmail')]},createElement(){return {}}},
  async loadCloudData(){loads++;assert.equal(locked,false,'database calls must not run under the auth lock');if(loadError)throw Error('database unavailable')},
  db:missingClient?null:{auth:{onAuthStateChange(fn){callback=fn},async getSession(){if(sessionError)throw Error('network offline');return {data:{session:null}}},async signInWithPassword(){if(loginError)throw Error('login offline');const session={user:{id:'u1'}};locked=true;const result=callback('SIGNED_IN',session);assert.equal(result,undefined,'auth callback must be synchronous');locked=false;return {data:{session}}},async signOut(){return {}}}}
