@@ -68,3 +68,16 @@ using (sender_id = (select auth.uid()) or exists (
 with check (sender_id = (select auth.uid()) and exists (
   select 1 from public.clients c where c.id = messages.client_id
     and (c.pt_id = (select auth.uid()) or c.user_id = (select auth.uid()))));
+
+-- Foreign-key and ownership lookups used by RLS and the application.
+create index if not exists clients_pt_id_idx on public.clients(pt_id);
+create unique index if not exists clients_user_id_unique_idx
+  on public.clients(user_id) where user_id is not null;
+create index if not exists availability_pt_id_idx on public.availability(pt_id);
+create index if not exists availability_client_id_idx on public.availability(client_id);
+create index if not exists sessions_pt_id_idx on public.sessions(pt_id);
+create index if not exists packages_client_id_idx on public.packages(client_id);
+create index if not exists payments_package_id_idx on public.payments(package_id);
+create index if not exists tasks_client_id_idx on public.tasks(client_id);
+create index if not exists tasks_pt_id_idx on public.tasks(pt_id);
+create index if not exists messages_sender_id_idx on public.messages(sender_id);
