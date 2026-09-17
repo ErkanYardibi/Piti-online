@@ -212,7 +212,7 @@ async function loadCloudData(){
  const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
  const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
- state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadClientInvitations();await loadLiveTasks();persistState();render();
+ state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();persistState();render();
 }
 const clientHistoryKeys=['package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'];
 let cloudHistoryVersions={},cloudHistoryOriginal={},clientInvitations=[],inviteOperation=false;
@@ -253,6 +253,17 @@ async function loadClientHistories(){
  }
  syncTestAccount();
 }
+async function loadMemberTrainer(){
+ if(state.role!=='member')return;
+ // Relationship comes from clients.pt_id; history snapshots never establish it.
+ const client=state.customer;
+ state.memberTrainer={name:client.ptId?'PT’im':'Henüz PT bağlantısı yok',code:'',status:client.ptId?'connected':'unlinked'};
+ if(!client.ptId)return;
+ const {data,error}=await db.rpc('get_my_trainer');
+ if(error||!data||data.client_id!==client.dbId||data.id!==client.ptId){state.memberTrainer.loadError=true;return}
+ state.memberTrainer={id:data.id,name:data.name||'PT’im',code:'',status:'connected'};
+ syncTestAccount();
+}
 async function loadClientInvitations(){
  clientInvitations=[];if(state.role!=='pt')return;
  const {data,error}=await db.from('client_invitations').select('id,client_id,email,expires_at,used_at,revoked_at').order('created_at',{ascending:false});
@@ -286,8 +297,10 @@ function renderClientInviteControls(){
    document.getElementById('inviteCustomerList').onclick=()=>nav('customers');
   }
  }else if(state.page==='trainer'){
-  view.innerHTML=`<h1>PT’im</h1><div class="card"><h2>${escapeHtml(state.memberTrainer?.name||'PT bağlantısı')}</h2><p>${state.customer.ptId?'Hesabın müşteri kaydına bağlı.':'PT’nin oluşturduğu davet kodunu girerek geçmiş kayıtlarına erişebilirsin.'}</p><button class="btn primary" id="openClientClaim">Müşteriye özel davet kodu gir</button></div>`;
-  document.getElementById('openClientClaim').onclick=()=>openClientClaim();
+  const connected=!!state.customer.ptId;
+  view.innerHTML=`<h1>PT’im</h1><div class="card"><h2>${escapeHtml(state.memberTrainer?.name||'PT bağlantısı')}</h2>${connected?`<span class="status green">Bağlı</span><p>Hesabın PT’ne bağlı. Ek davet kodu girmen gerekmiyor.</p>${state.memberTrainer?.loadError?'<p role="status">PT adı şu anda yüklenemedi. Sayfayı yenileyerek tekrar deneyebilirsin.</p>':''}<button class="btn primary" id="openTrainerMessages">PT’me mesaj gönder</button>`:'<p>PT’nin oluşturduğu davet kodunu girerek geçmiş kayıtlarına erişebilirsin.</p><button class="btn primary" id="openClientClaim">Müşteriye özel davet kodu gir</button>'}</div>`;
+  document.getElementById('openClientClaim')?.addEventListener('click',()=>openClientClaim());
+  document.getElementById('openTrainerMessages')?.addEventListener('click',()=>nav('messages'));
  }
 }
 async function createClientInvite(c){
