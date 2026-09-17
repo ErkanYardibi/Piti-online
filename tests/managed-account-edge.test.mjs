@@ -1,12 +1,15 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {createHandler} from '../supabase/functions/manage-client-account/handler.mjs';
 const pt='11111111-1111-4111-8111-111111111111',member='22222222-2222-4222-8222-222222222222',client='33333333-3333-4333-8333-333333333333';
-function harness({role='pt',required=false,valid=true,existing=false,finishError=false,samePassword=false}={}){
+function harness({role='pt',required=false,valid=true,existing=false,finishError=false,samePassword=false,noEmail=false,taken=false,loginFail=false}={}){
  const calls=[];const actor=role==='pt'?pt:member;
  const fetchImpl=async(url,options)=>{const path=new URL(url).pathname;const body=options.body?JSON.parse(options.body):null;calls.push({path,method:options.method,body,authorization:options.headers.Authorization});let data={};let status=200;
- if(path==='/auth/v1/user')data={id:actor};
+ if(path==='/rest/v1/profiles')data=taken?[{id:member}]:[];
+ else if(path==='/rest/v1/rpc/username_login_lookup')data='internal@accounts.mypiti.invalid';
+ else if(path==='/auth/v1/token'){if(loginFail){status=400;data={message:'Invalid login credentials'}}else data={access_token:'access',refresh_token:'refresh'}}
+ else if(path==='/auth/v1/user')data={id:actor};
  else if(path==='/rest/v1/rpc/account_context')data={role,must_change_password:required,session_valid:valid};
- else if(path==='/rest/v1/clients')data=options.method==='GET'&&url.includes('user_id=eq.'+member)?[{id:client}]:[];
- else if(path==='/rest/v1/rpc/managed_account_begin')data={operation_id:'op-1',client_id:client,user_id:body.p_kind==='create'?null:member,email:'member@example.invalid',full_name:'Member'};
+ else if(path==='/rest/v1/clients')data=options.method==='GET'&&url.includes('user_id=eq.'+member)&&role==='member'?[{id:client}]:[];
+ else if(path==='/rest/v1/rpc/managed_account_begin')data={operation_id:'op-1',client_id:client,user_id:body.p_kind==='create'?null:member,email:noEmail?null:'member@example.invalid',full_name:'Member'};
  else if(path==='/auth/v1/admin/users'&&options.method==='POST'){if(existing){status=422;data={message:'A user with this email address has already been registered'}}else data={id:member}}
  else if(path==='/rest/v1/rpc/managed_account_finish'&&finishError){status=400;data={message:'operation expired'}}
  else if(path==='/rest/v1/rpc/consume_entry_link')data={user_id:member,email:'member@example.invalid'};
@@ -34,3 +37,11 @@ for(const action of ['create','reset','password'])test(action+' accepts six char
  const short=harness(options);assert.equal((await short.call({action,client_id:client,password:'Ab12!'})).status,400);assert.ok(!short.calls.some(x=>x.path.includes('admin/users')||x.path.endsWith('managed_account_begin')));
  const valid=harness(options);assert.equal((await valid.call({action,client_id:client,password:'Ab12!x'})).status,200);
 });
+
+
+test('username login validates password via Auth and returns only session tokens',async()=>{const h=harness();const r=await h.call({action:'login',username:'MÜŞTERİ1',password:'Secret123'},'');assert.equal(r.status,200);assert.deepEqual(await r.json(),{access_token:'access',refresh_token:'refresh'});assert.equal(h.calls[0].body.p_username,'musteri1');assert.ok(h.calls.some(c=>c.path==='/auth/v1/token'&&c.body.password==='Secret123'));assert.ok(!h.calls.some(c=>c.path.includes('generate_link')))});
+test('wrong password returns generic login error and no tokens',async()=>{const h=harness({loginFail:true});const r=await h.call({action:'login',username:'musteri1',password:'wrong'},'');assert.equal(r.status,401);assert.ok(!(await r.json()).access_token)});
+test('only four required fields create a customer and login without contact email',async()=>{const h=harness({noEmail:true});const r=await h.call({action:'create_client',first_name:'Gonca',last_name:'Test',username:'Müşteri1',password:'Ab12!x'});assert.equal(r.status,200);const create=h.calls.find(c=>c.path==='/rest/v1/clients'&&c.method==='POST');assert.equal(create.body.email,null);assert.equal(create.body.weight,null);assert.equal(create.body.pt_id,pt);const user=h.calls.find(c=>c.path==='/auth/v1/admin/users');assert.match(user.body.email,/@accounts\.mypiti\.invalid$/);assert.equal(user.body.app_metadata.username,'musteri1');assert.equal((await r.json()).username,'musteri1')});
+test('taken username fails before a client or account is created',async()=>{const h=harness({taken:true});const r=await h.call({action:'create_client',first_name:'A',last_name:'B',username:'taken',password:'Ab12!x'});assert.equal(r.status,409);assert.ok(!h.calls.some(c=>c.path==='/rest/v1/clients'&&c.method==='POST'))});
+test('member cannot create client even with valid username',async()=>{const h=harness({role:'member'});assert.equal((await h.call({action:'create_client',first_name:'A',last_name:'B',username:'valid',password:'Ab12!x'})).status,403)});
+test('failed account creation cleans only new unlinked client and new user',async()=>{const h=harness({finishError:true,noEmail:true});assert.equal((await h.call({action:'create_client',first_name:'A',last_name:'B',username:'valid',password:'Ab12!x'})).status,400);assert.ok(h.calls.some(c=>c.path==='/rest/v1/clients'&&c.method==='DELETE'));assert.ok(h.calls.some(c=>c.path==='/auth/v1/admin/users/'+member&&c.method==='DELETE'))});
