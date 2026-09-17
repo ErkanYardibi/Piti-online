@@ -87,13 +87,13 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 /* Original supplied artwork, displayed as six CSS image windows. */
 .musclePicker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .muscleOption{min-width:0;margin:0}.muscleOption>span{display:flex;flex-direction:column;gap:7px;padding:6px;border-radius:14px;overflow:hidden;border:2px solid var(--line)}
-.muscleImage{display:block;flex-shrink:0;width:100%;aspect-ratio:1;background-image:url('/assets/muscle-groups-clean.webp');background-size:300% 200%;background-repeat:no-repeat;border-radius:9px}
+.muscleImage{display:block;flex-shrink:0;width:50%;aspect-ratio:1;background-image:url('/assets/muscle-groups-clean.webp');background-size:300% 200%;background-repeat:no-repeat;border-radius:9px}
 .muscle-chest{background-position:0% 0%}.muscle-back{background-position:50% 0%}.muscle-legs{background-position:100% 0%}
 .muscle-shoulders{background-position:0% 100%}.muscle-arms{background-position:50% 100%}.muscle-abs{background-position:100% 100%}
 .muscleOption input:checked+span{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .muscleOption input:focus-visible+span{outline:3px solid #225fc2;outline-offset:3px}
 .muscleOption input:checked+span b:before{content:'✓ ';font-weight:900}
-.muscleChip{border-radius:12px;padding:5px 8px 5px 5px;gap:7px}.muscleChip .muscleImage{width:78px}
+.muscleChip{border-radius:12px;padding:5px 8px 5px 5px;gap:7px}.muscleChip .muscleImage{width:39px}
 @media(max-width:520px){.musclePicker{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
