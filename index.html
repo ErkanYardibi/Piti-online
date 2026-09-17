@@ -82,6 +82,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 
 /* Chat stickers and message-linked tasks */
 .chatTools{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.chatStickerPicker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.chatSticker{display:grid;justify-items:center;gap:4px;padding:12px;background:var(--greenSoft);color:var(--text);border-radius:14px;text-align:center}.chatSticker span{font-size:36px;line-height:1.2}.chatSticker b{font-size:14px}.chatStickerPicker .btn{min-width:0;white-space:normal;padding:4px}.chatStickerPicker [aria-pressed="true"]{outline:2px solid var(--green2)}.chatTaskCheck{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:16px}.chatTaskCheck input{width:20px;height:20px}.taskFields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.taskFields input,.taskFields select{min-width:0;font-size:16px}.taskFields label{font-size:14px}.chatTaskStatus{display:grid;gap:8px;margin:10px 0;font-size:14px}.chatTaskLabel{font-size:12px;font-weight:700;margin-bottom:8px}.taskPhoto{max-width:100%;max-height:260px;border-radius:12px;object-fit:contain}.msg{overflow-wrap:anywhere}.msg .btn{margin:8px 0;min-height:44px}#chatStickerPreview{margin:12px 0}#chatStickers[hidden],#chatEmojis[hidden],#chatTaskFields[hidden],#chatStickerPreview[hidden]{display:none!important}.chatTools .btn{min-height:44px}#chatError:empty{display:none}@media(max-width:480px){.taskFields{grid-template-columns:1fr}.chatStickerPicker{gap:6px}.chatSticker b{font-size:13px}.msg{max-width:94%}}
+[hidden]{display:none!important}.authBack{overflow-y:auto}.authCard{margin:auto}#adminContent .btn{margin:3px}
 </style>
 </head>
 <body>
@@ -103,13 +104,13 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 <div class="toast" id="toast"></div>
 <div class="authBack" id="authBack">
  <form class="authCard" id="authForm">
-  <div class="authLogo">P<i>i</i>ti</div><p class="muted">E-posta ve şifrenle giriş yap. Hesap türün otomatik belirlenir.</p>
-  <div class="field"><label for="authName">Ad Soyad (ilk kayıtta)</label><input class="input" id="authName" autocomplete="name"></div>
-  <div class="field"><label for="authRole">Yeni hesap türü (yalnızca kayıt için)</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
+  <div class="authLogo">P<i>i</i>ti</div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
+  <div class="field" id="registrationName" hidden><label for="authName">Ad Soyad</label><input class="input" id="authName" autocomplete="name"></div>
+  <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
   <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
-  <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" minlength="6" required></div>
+  <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" required></div>
   <p class="small muted">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan. Şifreni unuttuysan PT’nden sıfırlamasını iste.</p><div class="authError" id="authError" role="alert"></div>
-  <div class="authActions"><button class="btn primary" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button><button class="btn ghost demo" type="button" id="demoBtn">Demo olarak devam et</button></div>
+  <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button><button class="btn ghost demo" type="button" id="demoBtn" hidden>Demo olarak devam et</button></div>
  </form>
 </div>
 <script src="/vendor/supabase.min.js"></script>
@@ -370,7 +371,7 @@ function showPasswordGate(){
   if(password.length<6){errorBox.textContent='En az 6 karakter kullan.';return}
   passwordSubmitting=true;button.disabled=true;errorBox.textContent='Şifren kaydediliyor…';
   try{
-   const email=authUser.email;await managedAccountRequest({action:'password',password});
+   const email=authUser.email;await adminAccountRequest({action:'own_password',password});
    authUser=null;const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;
    gate.remove();await activateSession(data.session);
   }catch(error){errorBox.textContent=error.message}finally{passwordSubmitting=false;button.disabled=false}
@@ -489,14 +490,92 @@ async function sendLiveMessage(){
  }catch(e){const target=document.getElementById('chatError');if(target)target.textContent='Gönderilemedi: '+e.message}finally{chatSending=false;if(button)button.disabled=false}
 }
 
-setInterval(()=>{if(authUser&&!demoMode&&!document.hidden&&!document.getElementById('passwordGate'))loadLiveTasks().catch(()=>{})},15000);
+setInterval(()=>{if(authUser&&!demoMode&&!adminMode&&!document.hidden&&!document.getElementById('passwordGate'))loadLiveTasks().catch(()=>{})},15000);
 captureEntryLink();
-setInterval(()=>{if(authUser&&!demoMode&&state.page==='messages'&&!document.hidden)refreshLiveChat()},5000);
+setInterval(()=>{if(authUser&&!demoMode&&!adminMode&&state.page==='messages'&&!document.hidden)refreshLiveChat()},5000);
 setInterval(async()=>{
- if(!authUser||demoMode||document.hidden||document.getElementById('passwordGate'))return;
+ if(!authUser||demoMode||adminMode||document.hidden||document.getElementById('passwordGate'))return;
  try{const access=await checkAccountAccess();if(access.must_change_password)showPasswordGate();else if(state.role!==access.role){state.role=access.role;render()}}
  catch{authUser=null;clearTimeout(cloudSyncTimer);document.querySelector('#authBack').hidden=false;view.innerHTML='';authMessage('Oturumun sona erdi. Yeniden giriş yap.')}
 },30000);
+
+let adminMode=false,adminTab='users',adminPage=0,adminSearch='';
+async function adminRpc(action,args={}){const {data,error}=await db.rpc('admin_console',{p_action:action,p_args:args});if(error)throw error;return data}
+async function adminAccountRequest(body){
+ const {data:{session}}=await db.auth.getSession();
+ const r=await fetch(SUPABASE_URL+'/functions/v1/admin-account',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify(body)});
+ const data=await r.json();if(!r.ok)throw Error(data.error||'İşlem tamamlanamadı.');return data;
+}
+async function enterAdmin(){
+ adminMode=true;clearTimeout(cloudSyncTimer);view.innerHTML='';sidebar.innerHTML='';
+ document.querySelector('#authBack').hidden=true;document.querySelector('#roleSeg').hidden=true;document.querySelector('#resetBtn').hidden=true;
+ if(!document.querySelector('#logoutBtn')){const b=document.createElement('button');b.id='logoutBtn';b.className='pill';b.textContent='Çıkış';b.onclick=()=>db.auth.signOut({scope:'local'});document.querySelector('.userbox').append(b)}
+ const {data,error}=await db.auth.mfa.getAuthenticatorAssuranceLevel();if(error)throw error;
+ if(data.currentLevel!=='aal2')return showAdminMfa();
+ document.getElementById('adminMfaGate')?.remove();await renderAdmin();
+}
+async function showAdminMfa(){
+ let gate=document.getElementById('adminMfaGate');if(gate)return;
+ gate=document.createElement('div');gate.id='adminMfaGate';gate.className='authBack';document.body.append(gate);
+ gate.innerHTML='<form class="authCard"><h2>Admin doğrulaması</h2><p id="mfaHelp">Doğrulama bilgileri yükleniyor…</p><div id="mfaSetup"></div><label for="mfaCode">6 haneli kod</label><input class="input" id="mfaCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><p id="mfaError" role="alert"></p><button class="btn primary" type="submit">Doğrula</button><button class="btn ghost" type="button" id="mfaExit">Çıkış</button></form>';
+ gate.querySelector('#mfaExit').onclick=()=>db.auth.signOut({scope:'local'});
+ try{
+  const {data,error}=await db.auth.mfa.listFactors();if(error)throw error;
+  let factor=data.totp.find(f=>f.status==='verified');
+  if(!factor){
+   for(const f of data.all.filter(f=>f.factor_type==='totp'&&f.status==='unverified')){const {error}=await db.auth.mfa.unenroll({factorId:f.id});if(error)throw error}
+   const enrolled=await db.auth.mfa.enroll({factorType:'totp',friendlyName:'PiTi ADMIN'});if(enrolled.error)throw enrolled.error;factor=enrolled.data;
+   gate.querySelector('#mfaHelp').textContent='Doğrulama uygulamanda hesap ekleyip QR kodu okut. Ardından uygulamadaki kodu gir. Telefon değiştirirken bu hesabı da aktar.';
+   const img=document.createElement('img');img.alt='PiTi doğrulama kurulumu QR kodu';img.style.cssText='width:220px;max-width:100%';img.src=factor.totp.qr_code.startsWith('data:')?factor.totp.qr_code:'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(factor.totp.qr_code);gate.querySelector('#mfaSetup').append(img);
+  }else gate.querySelector('#mfaHelp').textContent='Doğrulama uygulamandaki PiTi kodunu gir.';
+  gate.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=gate.querySelector('[type=submit]');b.disabled=true;try{const {error}=await db.auth.mfa.challengeAndVerify({factorId:factor.id,code:gate.querySelector('#mfaCode').value});if(error)throw error;gate.remove();await enterAdmin()}catch(e){gate.querySelector('#mfaError').textContent=e.message}finally{b.disabled=false}};
+ }catch(e){gate.querySelector('#mfaError').textContent=e.message}
+}
+const adminDate=v=>v?new Date(v).toLocaleString('tr-TR'):'—';
+async function renderAdmin(){
+ const tabs={users:'Kullanıcılar',links:'PT–Müşteri',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'Demo Yönetimi',settings:'Ayarlar'};
+ sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="btn ${adminTab===k?'primary':'ghost'}" data-admin-tab="${k}" style="margin:4px">${v}</button>`).join('');
+ sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;renderAdmin()});
+ view.innerHTML='<h1>ADMIN</h1><p>Yükleniyor…</p>';
+ try{
+  const summary=await adminRpc('overview');
+  const rows=await adminRpc(adminTab,{page:adminPage,search:adminSearch});
+  view.innerHTML=`<h1>Yönetim Paneli</h1><p class="muted">${summary.users} kullanıcı · ${summary.trainers} PT · ${summary.clients} müşteri · ${summary.online} çevrimiçi</p><h2>${tabs[adminTab]}</h2><div id="adminContent" class="card" style="overflow-x:auto"></div><div id="adminPagination" class="rightActions" style="margin-top:16px"><button class="btn ghost" id="adminPrev" ${adminPage===0?'disabled':''}>Önceki</button><span>${adminPage+1}. sayfa</span><button class="btn ghost" id="adminNext" ${!Array.isArray(rows)||rows.length<50?'disabled':''}>Sonraki</button><button class="btn ghost" id="adminRefresh">Yenile</button></div><p id="adminError" role="alert"></p>`;
+  const c=view.querySelector('#adminContent');
+  const table=(headers,items)=>'<table class="table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+items.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+  const e=escapeHtml;
+  if(adminTab==='users'){
+   c.innerHTML='<form id="adminSearchForm" class="rightActions"><input class="input" id="adminSearch" placeholder="İsim, kullanıcı adı veya e-posta" value="'+e(adminSearch)+'"><button class="btn ghost">Ara</button></form>'+table(['Kullanıcı','Tür / durum','Kayıt / son giriş','Son etkinlik','İşlemler'],rows.map(u=>[
+    `<b>${e(u.full_name)}</b><br>${e(u.username||'—')}<br><small>${e(u.email)}</small>`,e(u.is_admin?'ADMIN':u.role==='pt'?'PT':'Müşteri')+'<br>'+e(u.archived?'Arşivde':u.suspended?'Askıda':'Aktif'),adminDate(u.created_at)+'<br>'+adminDate(u.last_sign_in_at),(u.last_seen&&Date.now()-new Date(u.last_seen)<90000?'🟢 Çevrimiçi<br>':'')+adminDate(u.last_seen),u.is_admin?'—':`<button class="btn ghost sm" data-admin-action="password" data-id="${u.id}">Şifre sıfırla</button><button class="btn ghost sm" data-admin-action="revoke_user" data-id="${u.id}">Tüm oturumları kapat</button><button class="btn ghost sm" data-admin-action="${u.suspended||u.archived?'restore':'suspend'}" data-id="${u.id}">${u.suspended||u.archived?'Yeniden aç':'Askıya al'}</button><button class="btn ghost sm" data-admin-action="archive" data-id="${u.id}">Arşivle</button>`]));
+   c.querySelector('#adminSearchForm').onsubmit=ev=>{ev.preventDefault();adminSearch=c.querySelector('#adminSearch').value;adminPage=0;renderAdmin()};
+  }else if(adminTab==='links')c.innerHTML=table(['Müşteri','PT','Hesap bağlantısı','Durum'],rows.map(r=>[e(r.full_name),e(r.trainer||'Bağlı değil'),r.user_id?'Bağlı':'Hesap bağlanmamış',r.archived?'Arşiv':'Aktif']));
+  else if(adminTab==='sessions')c.innerHTML='<p class="muted">Çevrimiçi: son 90 saniyede etkinlik. Açık oturum, uygulamanın şu anda kullanıldığı anlamına gelmez.</p>'+table(['Kullanıcı','Cihaz / IP','Açılış / son etkinlik','İşlem'],rows.map(r=>[e(r.full_name),e(r.user_agent||'—')+'<br>'+e(r.ip||'—'),adminDate(r.created_at)+'<br>'+adminDate(r.last_seen),`<button class="btn ghost" data-admin-action="revoke_session" data-id="${r.id}">Oturumu kapat</button>`]));
+  else if(adminTab==='audit')c.innerHTML='<p class="muted">Bu özellik etkinleştirildikten sonraki değişiklikler kaydedilir. Şifre ve mesaj içerikleri kayda yazılmaz.</p>'+table(['Zaman','Kullanıcı','İşlem','Kayıt / alanlar'],rows.map(r=>[adminDate(r.created_at),e(r.actor||'Sistem'),e(r.entity+' · '+r.action),e(r.record_id||'')+'<br>'+e((r.changed_fields||[]).join(', '))]));
+  else if(adminTab==='logins')c.innerHTML='<p class="muted">Kimlik doğrulama sisteminin tuttuğu olaylar. Kaydedilmeyen başarısız denemeler burada görünmeyebilir.</p>'+table(['Zaman','Kullanıcı','Olay','IP'],rows.map(r=>[adminDate(r.created_at),e(r.username||r.actor_id||'—'),e(r.action||'—'),e(r.ip_address||'—')]));
+  else if(adminTab==='demo_versions'){
+   c.innerHTML='<p>Ortak demo verilerini düzenleyebilir veya önceki kayıtlı sürümü geri yükleyebilirsin.</p><button class="btn primary" id="editSharedDemo">Demoyu düzenle</button>'+table(['Kayıt zamanı','İşlem'],rows.map(r=>[adminDate(r.created_at),`<button class="btn ghost" data-restore-demo="${r.id}">Bu sürümü geri yükle</button>`]));
+   c.querySelector('#editSharedDemo').onclick=async()=>{try{const snapshot=await adminRpc('demo');state=clone(snapshot.data);demoMode=true;adminMode=false;render();document.querySelector('.userbox').insertAdjacentHTML('beforeend','<div class="card" id="demoAdminControls"><b>Admin demo düzenlemesi</b><p>Değişiklikler Kaydet düğmesine kadar yayınlanmaz.</p><button class="btn primary" id="saveSharedDemo">Kaydet ve dön</button><button class="btn ghost" id="cancelSharedDemo">Vazgeç</button></div>');const finish=()=>{document.querySelector('#demoAdminControls')?.remove();demoMode=false;adminMode=true;renderAdmin()};document.querySelector('#cancelSharedDemo').onclick=finish;document.querySelector('#saveSharedDemo').onclick=async()=>{try{await adminRpc('save_demo',{data:state,version:snapshot.version});finish()}catch(e){toast(e.message)}}}catch(e){toast(e.message)}};
+   c.querySelectorAll('[data-restore-demo]').forEach(b=>b.onclick=async()=>{if(!confirm('Ortak demo bu sürüme dönsün mü?'))return;try{const current=await adminRpc('demo');await adminRpc('restore_demo',{id:Number(b.dataset.restoreDemo),version:current.version});await renderAdmin()}catch(e){toast(e.message)}});
+  }
+  else if(adminTab==='settings'){
+   c.innerHTML=`<form id="adminSettings"><p><label><input type="checkbox" id="registrationOpen" ${rows.registration_open?'checked':''}> Yeni kayıtları kabul et</label></p><p><label><input type="checkbox" id="maintenance" ${rows.maintenance?'checked':''}> Bakım modu</label></p><label for="announcement">Genel duyuru</label><textarea class="input" id="announcement" maxlength="1000">${e(rows.announcement)}</textarea><button class="btn primary">Kaydet</button></form>`;
+   c.querySelector('form').onsubmit=async ev=>{ev.preventDefault();try{await adminRpc('save_settings',{registration_open:c.querySelector('#registrationOpen').checked,maintenance:c.querySelector('#maintenance').checked,announcement:c.querySelector('#announcement').value});toast('Ayarlar kaydedildi.')}catch(err){view.querySelector('#adminError').textContent=err.message}};
+  }
+  if(Array.isArray(rows)&&!rows.length)c.insertAdjacentHTML('beforeend','<p>Gösterilecek kayıt yok.</p>');
+  c.querySelectorAll('[data-admin-action]').forEach(b=>b.onclick=async()=>{
+   const action=b.dataset.adminAction,id=b.dataset.id;
+   if(action==='password')return adminPasswordDialog(id);
+   if(!confirm(b.textContent+' işlemini onaylıyor musun?'))return;b.disabled=true;
+   try{await adminRpc(action,action==='revoke_session'?{session_id:id}:{user_id:id});await renderAdmin()}catch(err){view.querySelector('#adminError').textContent=err.message;b.disabled=false}
+  });
+  view.querySelector('#adminPrev').onclick=()=>{adminPage--;renderAdmin()};view.querySelector('#adminNext').onclick=()=>{adminPage++;renderAdmin()};view.querySelector('#adminRefresh').onclick=()=>renderAdmin();
+ }catch(e){view.innerHTML='<h1>Yönetim Paneli</h1><p role="alert">'+escapeHtml(e.message)+'</p>'}
+}
+function adminPasswordDialog(id){
+ openModal('<h3>Geçici şifre belirle</h3><p>Kullanıcının oturumları kapatılır. Sonraki girişte kendi şifresini belirlemesi gerekir.</p><input class="input" id="adminNewPassword" type="password" autocomplete="new-password" minlength="6"><p id="adminPasswordError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="adminPasswordSave">Şifreyi sıfırla</button></div>');
+ modal.querySelector('#adminPasswordSave').onclick=async()=>{const b=modal.querySelector('#adminPasswordSave');b.disabled=true;try{await adminAccountRequest({action:'reset_password',user_id:id,password:modal.querySelector('#adminNewPassword').value});closeModal();toast('Geçici şifre ayarlandı.');await renderAdmin()}catch(e){modal.querySelector('#adminPasswordError').textContent=e.message;b.disabled=false}};
+}
+setInterval(async()=>{if(!authUser||demoMode||document.hidden||accountAccess?.must_change_password)return;try{const {error}=await db.rpc('heartbeat');if(error){clearTimeout(cloudSyncTimer);view.innerHTML='';sidebar.innerHTML='';document.getElementById('adminMfaGate')?.remove();document.querySelector('#authBack').hidden=false;authMessage(error.message);authUser=null;adminMode=false}}catch{}},30000);
 
 function setAuthBusy(busy){document.querySelectorAll('#authForm button,#authForm input,#authForm select').forEach(x=>x.disabled=busy)}
 function authMessage(message){document.querySelector('#authError').textContent=message||''}
@@ -507,7 +586,9 @@ function activateSession(session){
   demoMode=false;authUser=session.user;setAuthBusy(true);authMessage('Hesabın yükleniyor…');
   try{
    if(typeof checkAccountAccess==='function'){const access=await checkAccountAccess();state.role=access.role;if(access.must_change_password){showPasswordGate();return}}
+   if(accountAccess?.is_admin){await enterAdmin();return}
    await loadCloudData();
+   db.rpc('heartbeat').catch(()=>{});
    document.querySelector('#authBack').hidden=true;
    document.querySelector('#roleSeg').hidden=true;
    document.querySelector('#resetBtn').hidden=true;
@@ -523,7 +604,13 @@ function activateSession(session){
  return sessionActivation;
 }
 async function initAuth(){
- document.querySelector('#demoBtn').onclick=async()=>{demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){state=clone(seed);render();authMessage('Demo buluttan alınamadı; yerleşik veri açıldı.')}finally{setAuthBusy(false)}};
+ let registering=false;
+ const updateDemo=()=>{document.querySelector('#demoBtn').hidden=registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO'};
+ for(const id of ['#authEmail','#authPassword'])document.querySelector(id).addEventListener('input',updateDemo);
+ const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('');updateDemo()};
+
+ document.querySelector('#demoBtn').onclick=async()=>{if(registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO')return;demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){state=clone(seed);render();authMessage('Demo buluttan alınamadı; yerleşik veri açıldı.')}finally{setAuthBusy(false)}};
+ if(db)db.rpc('app_settings').then(({data,error})=>{if(error||!data)return;const n=document.createElement('p');n.className='muted';n.textContent=[data.announcement,data.maintenance?'Uygulama bakımda.':''].filter(Boolean).join(' ');document.querySelector('#authForm').prepend(n);if(!data.registration_open)document.querySelector('#signUpBtn').hidden=true;});
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
  // Supabase calls must run after the auth callback releases its session lock.
  db.auth.onAuthStateChange((event,session)=>{
@@ -531,11 +618,12 @@ async function initAuth(){
   else if(session&&!authUser)setTimeout(()=>{if(!authUser&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
  });
  document.querySelector('#authForm').onsubmit=async e=>{
-  e.preventDefault();setAuthBusy(true);authMessage('');
+  e.preventDefault();if(registering)return registerAccount();if(!document.querySelector('#demoBtn').hidden){await document.querySelector('#demoBtn').onclick();return}setAuthBusy(true);authMessage('');
   try{const {data,error}=await signInWithIdentifier(document.querySelector('#authEmail').value.trim(),document.querySelector('#authPassword').value);if(error)throw error;if(data.session)await activateSession(data.session)}
   catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
  };
- document.querySelector('#signUpBtn').onclick=async()=>{
+ document.querySelector('#signUpBtn').onclick=switchMode;
+ const registerAccount=async()=>{
   const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;
   if(!name||!/^\S+@\S+\.\S+$/.test(email)||password.length<6)return authMessage('Ad soyad, e-posta ve en az 6 karakterli şifre gerekli.');
   setAuthBusy(true);authMessage('');
@@ -557,7 +645,7 @@ function navIcon(name){const p={home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5
 function setRole(role){if(authUser&&!demoMode)return toast('Hesap türün kayıtlı rolüne bağlıdır.');if(role==='member'){state.role='member';state.page='today';state.financeCustomerId=state.customer.id;closeModal();save();render();return;}state.role='pt';state.page='dashboard';state.testPrimaryId=state.customer.id;closeModal();save();render()}
 function nav(page){if(demoMode&&state.role==='pt'&&state.testPrimaryId&&String(state.customer.id)!==String(state.testPrimaryId)&&page!=='messages')return switchTestUser(state.testPrimaryId,'pt',page);state.page=page;save();render()}
 function renderNav(){const items=state.role==='pt'?navPT:navM; sidebar.innerHTML=items.map(([p,i,t])=>`<button class="navBtn ${state.page===p?'active':''}" data-nav="${p}"><span class="navIcon">${navIcon(i)}</span><span class="navText">${t}${p==='messages'&&((state.unread||{})[state.role]||0)?' <span class=\"badge\">'+state.unread[state.role]+'</span>':''}</span></button>`).join('');sidebar.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));}
-function render(){if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
+function render(){if(adminMode)return;if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
  const map={dashboard:dashboard,customers:customers,customerProfile:customerProfile,invites:invites,calendar:calendar,finance:finance,messages:messages,today:memberToday,progress:progress,trainer:trainer,profile:state.role==='pt'?ptProfile:memberProfile}; (map[state.page]||dashboard)();renderResultApprovals();renderTestLauncher();renderLeavePanel();renderClientInviteControls();renderUsernameSettings();if(authUser&&!demoMode){const h=Array.from(view.querySelectorAll('h2')).find(h=>h.textContent==='Bugünkü Görevler');if(h)h.parentElement.id='liveMemberTasks';updateLiveTaskWidgets();} }
 function metricIcon(label){return ({'PT Seansı':'◷','Randevu Talebi':'✓','Geciken Görev':'⚠','Ödeme / Paket':'₺','Başlangıç Kilo':'⚖','Güncel Kilo':'↗','Değişim':'↘','Bel Ölçüsü':'⌁'})[label]||'✦'}
 const muscleOptions=[['Göğüs','🏋️'],['Sırt','🔙'],['Bacak','🦵'],['Omuz','💪'],['Kol','💪'],['Karın','🔥']];
