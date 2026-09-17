@@ -387,7 +387,7 @@ async function redeemPendingEntry(){
  try{
   // An entry link always identifies its own customer account, even on a shared device.
   const session=await managedAccountRequest({action:'redeem',token});
-  sessionStorage.removeItem('pitiEntryToken');authUser=null;
+  sessionStorage.removeItem('pitiEntryToken');sessionStorage.removeItem('pitiLoginMode');authUser=null;
   const {data,error}=await db.auth.setSession(session);if(error)throw error;
   if(data.session)await activateSession(data.session);
  }catch(error){sessionStorage.removeItem('pitiEntryToken');authMessage(error.message)}finally{setAuthBusy(false)}
@@ -507,7 +507,7 @@ async function adminAccountRequest(body){
  const data=await r.json();if(!r.ok)throw Error(data.error||'İşlem tamamlanamadı.');return data;
 }
 async function enterAdmin(){
- adminMode=true;clearTimeout(cloudSyncTimer);view.innerHTML='';sidebar.innerHTML='';
+ adminMode=true;renderTestLauncher();clearTimeout(cloudSyncTimer);view.innerHTML='';sidebar.innerHTML='';
  document.querySelector('#authBack').hidden=true;document.querySelector('#roleSeg').hidden=true;document.querySelector('#resetBtn').hidden=true;
  if(!document.querySelector('#logoutBtn')){const b=document.createElement('button');b.id='logoutBtn';b.className='pill';b.textContent='Çıkış';b.onclick=()=>db.auth.signOut({scope:'local'});document.querySelector('.userbox').append(b)}
  const {data,error}=await db.auth.mfa.getAuthenticatorAssuranceLevel();if(error)throw error;
@@ -533,6 +533,7 @@ async function showAdminMfa(){
 }
 const adminDate=v=>v?new Date(v).toLocaleString('tr-TR'):'—';
 async function renderAdmin(){
+ renderTestLauncher();
  const tabs={users:'Kullanıcılar',links:'PT–Müşteri',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'Demo Yönetimi',settings:'Ayarlar'};
  sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="btn ${adminTab===k?'primary':'ghost'}" data-admin-tab="${k}" style="margin:4px">${v}</button>`).join('');
  sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;renderAdmin()});
@@ -586,9 +587,10 @@ function activateSession(session){
   demoMode=false;authUser=session.user;setAuthBusy(true);authMessage('Hesabın yükleniyor…');
   try{
    if(typeof checkAccountAccess==='function'){const access=await checkAccountAccess();state.role=access.role;if(access.must_change_password){showPasswordGate();return}}
-   if(accountAccess?.is_admin){await enterAdmin();return}
+   if(accountAccess?.is_admin&&sessionStorage.getItem('pitiLoginMode')==='admin'){await enterAdmin();return}
+   sessionStorage.removeItem('pitiLoginMode');adminMode=false;document.getElementById('adminMfaGate')?.remove();renderTestLauncher();
    await loadCloudData();
-   db.rpc('heartbeat').catch(()=>{});
+   Promise.resolve(db.rpc('heartbeat')).catch(()=>{});
    document.querySelector('#authBack').hidden=true;
    document.querySelector('#roleSeg').hidden=true;
    document.querySelector('#resetBtn').hidden=true;
@@ -614,7 +616,7 @@ async function initAuth(){
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
  // Supabase calls must run after the auth callback releases its session lock.
  db.auth.onAuthStateChange((event,session)=>{
-  if(event==='SIGNED_OUT'){authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
+  if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
   else if(session&&!authUser)setTimeout(()=>{if(!authUser&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
  });
  document.querySelector('#authForm').onsubmit=async e=>{
@@ -627,7 +629,7 @@ async function initAuth(){
   const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;
   if(!name||!/^\S+@\S+\.\S+$/.test(email)||password.length<6)return authMessage('Ad soyad, e-posta ve en az 6 karakterli şifre gerekli.');
   setAuthBusy(true);authMessage('');
-  try{localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{full_name:name,account_type:role}}});if(error)throw error;if(data.session)await activateSession(data.session);else authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.')}
+  try{sessionStorage.removeItem('pitiLoginMode');localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{full_name:name,account_type:role}}});if(error)throw error;if(data.session)await activateSession(data.session);else authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.')}
   catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
  };
  if(typeof redeemPendingEntry==='function'&&await redeemPendingEntry())return;
@@ -781,6 +783,8 @@ function copyText(txt){if(navigator.clipboard&&window.isSecureContext){navigator
 function fallbackCopy(txt){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Kopyalandı.')}catch{toast('Kod: '+txt)}ta.remove()}
 function normalizeLoginName(value){return String(value||'').trim().replace(/[ÇĞİÖŞÜçğıöşüI]/g,c=>({'Ç':'C','Ğ':'G','İ':'I','Ö':'O','Ş':'S','Ü':'U','ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u','I':'i'}[c])).toLowerCase()}
 async function signInWithIdentifier(identifier,password){
+ // Navigation intent only: admin authorization and AAL2 are enforced by the server.
+ sessionStorage.setItem('pitiLoginMode',normalizeLoginName(identifier)==='admin'?'admin':'account');
  if(identifier.includes('@'))return db.auth.signInWithPassword({email:identifier.trim(),password});
  const session=await managedAccountRequest({action:'login',username:normalizeLoginName(identifier),password});
  return db.auth.setSession(session);
@@ -1305,7 +1309,7 @@ function switchTestUser(id,role,page){
 }
 function testEventVisible(e){if(state.role==='pt')return true;return e.customerId!=null?String(e.customerId)===String(state.customer.id):['availability','off'].includes(e.type);}
 function renderTestLauncher(){
- const existing=document.querySelector('#testUserLauncher');if(state.cleanDataVersion===1){existing?.remove();return;}
+ const existing=document.querySelector('#testUserLauncher');if(!demoMode||adminMode||state.cleanDataVersion===1){existing?.remove();document.querySelector('#testChatCustomer')?.closest('.field')?.remove();return;}
  if(state.role==='pt'&&state.page==='messages'){
  const field=document.createElement('div');field.className='field';
  field.innerHTML=`<label for="testChatCustomer">Test: Müşteri sohbeti</label><select id="testChatCustomer">${Object.values(state.customerAccounts).filter(a=>a.customer).map(a=>`<option value="${escapeHtml(String(a.customer.id))}" ${String(a.customer.id)===String(state.customer.id)?'selected':''}>${escapeHtml(a.customer.name)}</option>`).join('')}</select>`;
@@ -1318,6 +1322,7 @@ function renderTestLauncher(){
  button.hidden=document.activeElement?.id==='msgInput';
 }
 function openTestUsers(){
+ if(!demoMode||adminMode)return;
  syncTestAccount();
  const list=Object.values(state.customerAccounts).filter(a=>a.customer);
  openModal(`<h3>Test Kullanıcısı Seç</h3><p class="small muted">Geçici test arayüzü. Aynı tarayıcıda PT ve müşteri arasında geçerek işlemleri karşılıklı test edebilirsin. Her hesabın verisi ayrı saklanır.</p><button class="btn primary block" id="testPT">Mehmet Kaya · PT olarak aç</button><div class="field"><label for="testSearch">İsim veya senaryo ara</label><input class="input" id="testSearch" placeholder="No Show, paketsiz, onay..."></div><div id="testUserList">${list.map(a=>`<button class="btn ghost block" style="margin:8px 0;text-align:left;white-space:normal" data-test-user="${escapeHtml(String(a.customer.id))}"><b>${escapeHtml(a.customer.name)}</b><div class="small muted">${escapeHtml(a.customer.testScenario||'Mevcut müşteri')}</div></button>`).join('')}</div><div class="modalFoot"><button class="btn ghost" data-close>Kapat</button></div>`);
