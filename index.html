@@ -162,7 +162,7 @@ function cleanDemoState(source){
  return clean;
 }
 function load(){try{const s=localStorage.getItem('pitiDemoV4');const loaded=s?JSON.parse(s):clone(seed);if(!loaded.cleanDataVersion)return cleanDemoState(loaded);if(!Array.isArray(loaded.demoCustomers))loaded.demoCustomers=[];if(!Array.isArray(loaded.manualCustomers))loaded.manualCustomers=[];return loaded}catch{return cleanDemoState(seed)}}
-function persistState(){localStorage.setItem('pitiDemoV4',JSON.stringify(state));if(authUser&&!demoMode)localStorage.setItem('pitiAccount:'+authUser.id,JSON.stringify(state))}
+function persistState(){if(!authUser||demoMode)localStorage.setItem('pitiDemoV4',JSON.stringify(state))}
 function save(){syncTestAccount();persistState();queueCloudSync()}
 function queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast('Buluta kaydedilemedi: '+e.message)),650)}
 function uuid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16)})}
@@ -178,7 +178,7 @@ function syncCloudData(){
 async function syncCloudDataNow(){
  if(!authUser||demoMode||!db)return;
  const profile=state.role==='pt'?state.ptProfile:state.customer;
- const {error:profileError}=await db.from('profiles').update({full_name:profile.name||authUser.email,phone:profile.phone||null,avatar_url:null}).eq('id',authUser.id);
+ const {error:profileError}=await db.from('profiles').update({full_name:profile.name||authUser.email,phone:profile.phone||null,avatar_url:profile.photo||null}).eq('id',authUser.id);
  if(profileError)throw profileError;
  const customers=state.role==='pt'?[state.customer,...(state.manualCustomers||[])].filter(c=>c.cloudManaged):[state.customer];
  for(const c of customers){
@@ -192,6 +192,8 @@ async function syncCloudDataNow(){
  const sessions=(state.events||[]).filter(e=>e.type==='session'&&byLocal.has(String(e.customerId))).map(e=>{const c=byLocal.get(String(e.customerId));e.dbId=e.dbId||uuid();return {id:e.dbId,client_id:c.dbId,pt_id:state.role==='pt'?authUser.id:(e.ptId||c.ptId||null),starts_at:eventTimestamp(e.date,e.time),ends_at:e.endTime?eventTimestamp(e.date,e.endTime):null,status:sessionStatusToDb(e.status),workout_title:e.title||null,muscle_groups:Array.isArray(e.muscleGroups)?e.muscleGroups:[],salon:e.location||null,notes:e.note||e.sessionNote||null,counts_against_package:e.counts!==false,updated_at:new Date().toISOString()}});
  if(sessions.length){const {error}=await db.from('sessions').upsert(sessions,{onConflict:'id'});if(error)throw error}
  await syncClientHistories(customers);
+ const {error:stateError}=await db.from('account_state').upsert({user_id:authUser.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+ if(stateError)throw stateError;
  persistState();
 }
 function mapCloudCustomer(c){return {id:c.id,dbId:c.id,name:c.full_name,initials:(c.full_name||'?').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase(),phone:c.phone||'',email:c.email||'',blood:c.blood_type||'',gender:c.gender||'',weight:Number(c.weight)||'',height:Number(c.height)||'',archived:!!c.archived,status:'active',appAccess:c.user_id?'registered':'manual',userId:c.user_id,ptId:c.pt_id,cloudManaged:true}}
@@ -199,20 +201,20 @@ async function loadCloudData(){
  const pending=JSON.parse(localStorage.getItem('pitiPendingProfile')||'null');
  let {data:profile}=await db.from('profiles').select('*').eq('id',authUser.id).maybeSingle();
  if(!profile)throw Error('Hesap profili bulunamadı. Yeniden giriş yap.');
- const cached=localStorage.getItem('pitiAccount:'+authUser.id);
- if(state.cloudOwner!==authUser.id){
-  if(cached)state=JSON.parse(cached);
-  else if(state.cloudOwner||profile.role!=='pt'||state.ptProfile.name!==profile.full_name)state=cleanDemoState(seed);
- }
+ const {data:cloudState,error:cloudStateError}=await db.from('account_state').select('data').eq('user_id',authUser.id).maybeSingle();
+ if(cloudStateError)throw cloudStateError;
+ if(cloudState?.data&&typeof cloudState.data==='object')state=cloudState.data;
+ else state=cleanDemoState(seed);
+ localStorage.removeItem('pitiAccount:'+authUser.id);
  state.cloudOwner=authUser.id;state.loginUsername=profile.username||'';
  localStorage.removeItem('pitiPendingProfile');state.role=profile.role==='member'?'member':'pt';state.page=state.role==='pt'?'dashboard':'today';
  const priorCustomers=[state.customer,...(state.manualCustomers||[])];syncTestAccount();
- if(state.role==='pt'){state.ptProfile.name=profile.full_name;const {data:clients,error}=await db.from('clients').select('*').eq('pt_id',authUser.id).order('created_at');if(error)throw error;for(const old of priorCustomers){if(old.dbId&&!clients.some(c=>c.id===old.dbId))forgetCustomer(old)}if(clients?.length){const mapped=clients.map(mapCloudCustomer);for(const c of mapped){const old=priorCustomers.find(x=>(x.dbId||x.id)===c.id);if(old){state.customerAccounts[c.id]=state.customerAccounts[old.id]||{};state.events.forEach(e=>{if(String(e.customerId)===String(old.id))e.customerId=c.id});}}state.customer=mapped[0];state.manualCustomers=mapped.slice(1).concat(priorCustomers.filter(x=>x.cloudManaged&&!x.dbId));state.demoCustomers=[]}}
- else {let {data:client,error}=await db.from('clients').select('*').eq('user_id',authUser.id).maybeSingle();if(error)throw error;if(!client){const created=await db.from('clients').insert({user_id:authUser.id,full_name:profile.full_name,email:authUser.email?.endsWith('@accounts.mypiti.invalid')?null:authUser.email}).select().single();if(created.error)throw created.error;client=created.data}state.customer=mapCloudCustomer(client);state.manualCustomers=[];state.demoCustomers=[];state.customerAccounts={};state.events=[];Object.assign(state,emptyClientHistory())}
+ if(state.role==='pt'){state.ptProfile.name=profile.full_name;state.ptProfile.photo=profile.avatar_url||state.ptProfile.photo||'';const {data:clients,error}=await db.from('clients').select('*').eq('pt_id',authUser.id).order('created_at');if(error)throw error;for(const old of priorCustomers){if(old.dbId&&!clients.some(c=>c.id===old.dbId))forgetCustomer(old)}if(clients?.length){const mapped=clients.map(mapCloudCustomer);for(const c of mapped){const old=priorCustomers.find(x=>(x.dbId||x.id)===c.id);if(old){state.customerAccounts[c.id]=state.customerAccounts[old.id]||{};state.events.forEach(e=>{if(String(e.customerId)===String(old.id))e.customerId=c.id});}}state.customer=mapped[0];state.manualCustomers=mapped.slice(1).concat(priorCustomers.filter(x=>x.cloudManaged&&!x.dbId));state.demoCustomers=[]}}
+ else {let {data:client,error}=await db.from('clients').select('*').eq('user_id',authUser.id).maybeSingle();if(error)throw error;if(!client){const created=await db.from('clients').insert({user_id:authUser.id,full_name:profile.full_name,email:authUser.email?.endsWith('@accounts.mypiti.invalid')?null:authUser.email}).select().single();if(created.error)throw created.error;client=created.data}state.customer={...mapCloudCustomer(client),photo:profile.avatar_url||state.customer?.photo||''};state.manualCustomers=[];state.demoCustomers=[];state.customerAccounts={};state.events=[];Object.assign(state,emptyClientHistory())}
  const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
  const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
- state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();persistState();render();
+ state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();if(!cloudState)await syncCloudDataNow();persistState();render();
 }
 const clientHistoryKeys=['package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'];
 let cloudHistoryVersions={},cloudHistoryOriginal={},clientInvitations=[],inviteOperation=false;
