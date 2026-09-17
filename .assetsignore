@@ -1,0 +1,8 @@
+.git/
+.wrangler/
+supabase/
+tests/
+netlify.toml
+wrangler.jsonc
+.assetsignore
+.gitignore
