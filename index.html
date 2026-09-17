@@ -26,7 +26,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .field{display:flex;flex-direction:column;gap:6px;margin:10px 0}.field label{font-size:12px;color:var(--muted);font-weight:650}.input,select,textarea{border:1px solid #d8e0e5;border-radius:10px;padding:10px 11px;background:#fff;color:var(--text);width:100%}.modalBack{position:fixed;inset:0;background:rgba(11,22,32,.45);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}.modalBack.show{display:flex}.modal{width:min(520px,100%);background:#fff;border-radius:20px;box-shadow:0 28px 70px rgba(0,0,0,.22);padding:20px;max-height:92vh;overflow:auto}.modal h3{margin:0 0 12px;font-size:21px}.modalFoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.toast{position:fixed;right:20px;bottom:20px;background:#122033;color:#fff;padding:12px 16px;border-radius:12px;box-shadow:var(--shadow);transform:translateY(30px);opacity:0;pointer-events:none;transition:.2s;z-index:200}.toast.show{transform:none;opacity:1}.uploadBox{border:1px dashed #b9c5cd;border-radius:12px;padding:14px;text-align:center;background:#fafcfc}.receiptName{margin-top:8px;font-size:12px;color:var(--muted)}
 .mobileMenu{display:none}.notice{padding:11px 13px;border-radius:12px;background:#edf8ff;color:#2b608c;font-size:13px;border:1px solid #d9edf9}.rightActions{display:flex;gap:8px;flex-wrap:wrap}.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:900}.chartBox{height:240px;position:relative;padding:12px 6px}.chartBox svg{width:100%;height:100%;overflow:visible}.chartLegend{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:4px}.profileRow{display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:center}.profilePhoto{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#d8e7ff,#d7faea);color:var(--text);font-size:32px;font-weight:900;overflow:hidden;border:1px solid var(--line)}.profilePhoto img,.avatar img{width:100%;height:100%;object-fit:cover;display:block}.photoPicker{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff;color:var(--text);font-weight:700;cursor:pointer}.photoPicker input{display:none}.locationCard{border:1px solid var(--line);border-radius:14px;padding:13px;margin-top:10px}
 @media(max-width:1050px){.grid4{grid-template-columns:repeat(2,1fr)}.grid2,.calendarWrap{grid-template-columns:1fr}.shell{grid-template-columns:84px 1fr}.sidebar .navText{display:none}.sidebar{padding:18px 10px}.navBtn{justify-content:center}.tag{display:none}}
-@media(max-width:720px){.topbar{padding:0 14px}.content{padding:14px}.shell{display:block}.sidebar{position:fixed;left:0;right:0;bottom:0;z-index:30;height:calc(72px + env(safe-area-inset-bottom, 0px));border-right:0;border-top:1px solid var(--line);display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px));background:#fff}.navBtn{flex:0 0 auto;width:auto;min-width:86px;margin:0;padding:6px 9px;display:flex;flex-direction:column;gap:4px;font-size:13.3333px;line-height:1.25;white-space:nowrap}.sidebar .navText{display:block}.navIcon{width:22px;height:19px;font-size:16px;line-height:19px}.content{padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px))}.grid4{grid-template-columns:1fr 1fr}.userbox .pill{display:none}.calendar .day{min-height:72px;padding:6px}.dayBadge{display:none}.packageStats{grid-template-columns:1fr}.toolbar h1{font-size:24px}}
+@media(max-width:720px){.topbar{padding:0 14px}.content{padding:14px}.shell{display:block}.sidebar{position:fixed;left:0;right:0;bottom:0;z-index:30;height:calc(72px + env(safe-area-inset-bottom, 0px));border-right:0;border-top:1px solid var(--line);display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px));background:#fff}.navBtn{flex:0 0 auto;width:auto;min-width:86px;margin:0;padding:6px 9px;display:flex;flex-direction:column;gap:4px;font-size:13.3333px;line-height:1.25;white-space:nowrap}.sidebar .navText{display:block}.navIcon{width:22px;height:19px;font-size:16px;line-height:19px}.content{padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px))}.grid4{grid-template-columns:1fr 1fr}.userbox #resetBtn{display:none}.calendar .day{min-height:72px;padding:6px}.dayBadge{display:none}.packageStats{grid-template-columns:1fr}.toolbar h1{font-size:24px}}
 
 @media(max-width:720px){
  .calHead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}
@@ -95,6 +95,10 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .muscleOption input:checked+span b:before{content:'✓ ';font-weight:900}
 .muscleChip{border-radius:12px;padding:5px 8px 5px 5px;gap:7px}.muscleChip .muscleImage{width:39px}
 @media(max-width:520px){.musclePicker{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.userbox .avatar{flex:0 0 38px;padding:0;border:0;overflow:hidden;color:var(--text);cursor:pointer}
+.userbox .avatar:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+#logoutBtn{flex-shrink:0;white-space:nowrap;min-height:44px}
+@media(max-width:380px){.topbar{padding-inline:10px;gap:8px}.userbox{gap:6px}.userbox .cloudBadge{font-size:10px;padding:6px;white-space:nowrap}#logoutBtn{padding-inline:10px}}
 </style>
 </head>
 <body>
@@ -104,7 +108,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
     <div class="userbox">
       <div class="seg" id="roleSeg"><button data-role="pt" class="active">PT</button><button data-role="member">Müşteri</button></div>
       <button class="pill" id="resetBtn">Verileri temizle</button>
-      <div class="avatar" id="avatar">MK</div>
+      <button class="avatar" id="avatar" type="button" aria-label="Profilim" title="Profilim">MK</button>
     </div>
   </header>
   <div class="shell">
@@ -1469,6 +1473,7 @@ function openAddLocation(){openModal(`<h3>Salon / Lokasyon Ekle</h3><div class="
 function openModal(html){modal.innerHTML=html;modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){modalBack.classList.remove('show')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
 function toast(t){const el=document.querySelector('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 function escapeHtml(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+document.querySelector('#avatar').onclick=()=>nav('profile');
 document.querySelectorAll('#roleSeg button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));document.querySelector('#resetBtn').onclick=()=>{state=cleanDemoState(state);save();toast('Demo temizlendi.');render()};
 setInterval(()=>{if(['dashboard','today','calendar'].includes(state.page)&&!modalBack.classList.contains('show'))render();},60000);
 render();maybeOpenJoinLink();initAuth();
