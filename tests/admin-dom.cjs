@@ -5,6 +5,8 @@ for(const id of ['authEmail','authPassword']){d.getElementById(id).value='DEMO';
 w.testRun("state.role='member';view.innerHTML=chatComposerHtml();bindChatComposer()");
 assert.equal(d.querySelector('#chatStickerToggle'),null);assert.equal(d.querySelectorAll('[data-sticker]').length,0);assert.equal(d.querySelector('#chatAsTask'),null);assert.ok(d.querySelector('#chatEmojiToggle'));
 w.testRun("state.role='pt';view.innerHTML=chatComposerHtml();bindChatComposer()");assert.ok(d.querySelector('#chatStickerToggle'));assert.equal(d.querySelectorAll('[data-sticker]').length,6);assert.ok(d.querySelector('#chatAsTask'));
+w.testRun("openAddCustomer()");assert.ok(d.querySelector('#addNewAccount'));assert.ok(d.querySelector('#linkExistingAccount'));d.querySelector('#linkExistingAccount').click();assert.ok(d.querySelector('#existingClientEmail'));assert.equal(d.querySelector('#mcInitialPassword'),null);
+w.testRun("state.events.push({id:'11111111-1111-4111-8111-111111111111',type:'session',status:'planned',date:'2026-10-01',time:'14:00',title:'Test Seansı',customerId:state.customer.id});openEventEdit('11111111-1111-4111-8111-111111111111')");assert.ok(d.querySelector('#saveEventEdit'));assert.equal(d.querySelector('#editTitle').value,'Test Seansı');w.testRun('closeModal()');
 // Exercise session routing without loading real business data.
 await w.testRun(`
  window.savedEnterAdmin=enterAdmin;window.savedCheck=checkAccountAccess;window.savedLoad=loadCloudData;
