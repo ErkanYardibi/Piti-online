@@ -4,5 +4,6 @@ supabase/
 tests/
 netlify.toml
 wrangler.jsonc
+worker.js
 .assetsignore
 .gitignore
