@@ -235,10 +235,10 @@ async function loadCloudData(){
  state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();if(!cloudState||migratedLegacy)await syncCloudDataNow();localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
 }
 async function loadDemoData(){
- let next=clone(seed),version=0;
- if(db){const {data,error}=await db.from('demo_state').select('data,version').eq('id','main').maybeSingle();if(error)throw error;if(data?.data&&typeof data.data==='object'){next=data.data;version=data.version}}
+ let next=null,version=0;
+ if(db){try{const {data,error}=await db.from('demo_state').select('data,version').eq('id','main').maybeSingle();if(error)throw error;if(data?.data&&typeof data.data==='object'){next=data.data;version=data.version}}catch{}}
+ if(!next){const response=await fetch('/assets/demo-state.json');if(!response.ok)throw Error('Demo verileri yüklenemedi.');next=await response.json();}
  state=next;state.demoCloudVersion=version;state.calCursor=new Date(today.getFullYear(),today.getMonth(),1).toISOString();state.selectedDate=iso(today);
- if(state.package){state.package.start=iso(addDays(today,-9));state.package.end=iso(addDays(today,21))}
  state.tasks=(state.tasks||[]).map(t=>({...t,date:t.date||iso(today)}));state.invite=state.invite||{ptCode:'MEHMET-4821',oneTimeCodes:[],pending:[],approved:[]};
  for(const request of state.invite.pending||[])request.created=request.created||iso(today);
  demoMode=true;authUser=null;localStorage.removeItem('pitiDemoV4');render();
@@ -675,7 +675,7 @@ async function initAuth(){
  for(const id of ['#authEmail','#authPassword'])document.querySelector(id).addEventListener('input',updateDemo);
  const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('');updateDemo()};
 
- document.querySelector('#demoBtn').onclick=async()=>{if(registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO')return;demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){state=clone(seed);render();authMessage('Demo buluttan alınamadı; yerleşik veri açıldı.')}finally{setAuthBusy(false)}};
+ document.querySelector('#demoBtn').onclick=async()=>{if(registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO')return;demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
  if(db)db.rpc('app_settings').then(({data,error})=>{if(error||!data)return;const n=document.createElement('p');n.className='muted';n.textContent=[data.announcement,data.maintenance?'Uygulama bakımda.':''].filter(Boolean).join(' ');document.querySelector('#authForm').prepend(n);if(!data.registration_open)document.querySelector('#signUpBtn').hidden=true;});
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
  // Supabase calls must run after the auth callback releases its session lock.
