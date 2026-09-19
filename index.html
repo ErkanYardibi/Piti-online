@@ -86,6 +86,8 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .calHead{gap:8px;flex-wrap:wrap}
 .calendarWrap>.card{overflow-wrap:anywhere}
 .eventDetails{min-width:0;width:100%}
+.eventEditActions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin-top:10px}
+.eventEditActions>.btn{flex:0 0 auto;white-space:nowrap}
 .eventMetaRow{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin-top:7px}
 .eventMetaRow>.status{flex:0 0 auto;max-width:100%;align-self:center;white-space:normal;word-break:normal;overflow-wrap:normal}
 .eventTop{align-items:flex-start}
@@ -1164,13 +1166,15 @@ function dayCell(d,month,selected){const ds=iso(d), ev=state.events.filter(e=>e.
 function eventColor(e){if(hasDelay(e))return 'amber';return e.type==='availability'?'green':(e.type==='off'||e.type==='memberoff')?'red':e.type==='demo'?'green':e.status==='completed'?'blue':e.status==='noshow'?'amber':'blue'}
 function eventCard(e){
  if(state.role==='pt'&&e.type==='session'&&e.status==='requested')return `<button type="button" class="eventItem" style="display:block;width:100%;text-align:left;cursor:pointer" data-review-request="${e.id}"><span class="eventStudent">${escapeHtml(eventCustomer(e)||'Öğrenci')}</span><span class="eventSessionTitle">${escapeHtml(e.title)}</span><span class="eventMeta" style="display:block">${escapeHtml(eventTime(e))} · PT Seansı · Onay bekliyor</span><span class="status amber" style="margin-top:10px">Talebi incele ›</span></button>`;
+ let editActions='';
  let actions=state.role==='pt'&&e.type==='session'&&['completed','noshow'].includes(e.status)?`<div class="rightActions" style="margin-top:10px"><button class="btn sm ghost" data-edit-result="${e.id}">Sonucu Düzenle</button></div>`:'';
  if(state.role==='pt'&&e.type==='session'&&e.status==='planned'&&!leaveConflicts(e).length&&eventFinish(e)<=Date.now()) actions=`<div class="rightActions" style="margin-top:10px"><button class="btn sm primary" data-complete-session="${e.id}">Seansı Tamamla</button><button class="btn sm amber" data-noshow="${e.id}">No Show</button></div>`;
- if(state.role==='pt'&&e.type==='session'&&e.status==='planned'&&eventOwner(e)==='pt') actions+=`<div class="rightActions" style="margin-top:10px"><button class="btn sm red" data-delete-session="${e.id}">Seansı Sil</button></div>`;
+ if(state.role==='pt'&&e.type==='session'&&e.status==='planned'&&eventOwner(e)==='pt') editActions+=`<button class="btn sm red" data-delete-session="${e.id}">Seansı Sil</button>`;
  if(state.role==='member'&&e.type==='availability'&&e.status==='open') actions=`<button class="btn sm primary" style="margin-top:10px" data-request-slot="${e.id}">Bu Saati Talep Et</button>`;
- if(canDeletePTCalendarEntry(e))actions+=`<div class="rightActions" style="margin-top:10px"><button class="btn sm red" data-delete-calendar="${e.id}">Sil</button></div>`;
- if(canEditEvent(e)&&!leaveConflicts(e).length)actions+=`<div class="rightActions" style="margin-top:10px"><button class="btn sm ghost" data-edit-event="${e.id}">Düzenle</button></div>`;
- if(state.role==='member'&&e.type==='memberoff'&&ownsMemberLeave(e)&&canEditEvent(e))actions+=`<div class="rightActions" style="margin-top:10px"><button class="btn sm red" data-delete-member-leave="${e.id}">Sil</button></div>`;
+ if(canDeletePTCalendarEntry(e))editActions+=`<button class="btn sm red" data-delete-calendar="${e.id}">Sil</button>`;
+ if(canEditEvent(e)&&!leaveConflicts(e).length)editActions=`<button class="btn sm ghost" data-edit-event="${e.id}">Düzenle</button>`+editActions;
+ if(state.role==='member'&&e.type==='memberoff'&&ownsMemberLeave(e)&&canEditEvent(e))editActions+=`<button class="btn sm red" data-delete-member-leave="${e.id}">Sil</button>`;
+ if(editActions)actions+=`<div class="eventEditActions">${editActions}</div>`;
  const statusBadge=`<span class="status ${e.status==='completed'?'green':needsResult(e)||e.status==='noshow'?'amber':e.type==='off'?'red':'blue'}">${statusText(e)}</span>`;
  const eventContent=e.type==='session'
    ? `<div class="eventStudent">${escapeHtml(eventCustomer(e)||'Öğrenci')}</div><div class="eventSessionTitle">${escapeHtml(e.title)}</div><div class="eventMeta eventMetaRow"><span>${escapeHtml(eventTime(e))} · PT Seansı</span>${statusBadge}</div>${muscleGroupsHtml(e.muscleGroups)}${e.note?`<div class="eventNote" style="margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere"><b>Not:</b> ${escapeHtml(e.note)}</div>`:''}${state.role==='member'?previousSessionSummary(e.customerId,e.date):''}`
