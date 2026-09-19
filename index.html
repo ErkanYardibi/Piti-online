@@ -1227,23 +1227,25 @@ function openPackage(){
  };
 }
 function recordSessionResult(e,status,count,reason='',note='',groups){
- if(leaveConflicts(e).length){toast('Önce izin çakışmasını iptal veya erteleme ile çöz.');return false;}
  if(state.role!=='pt'||!e||e.type!=='session'||!['planned','completed','noshow'].includes(e.status)||!['completed','noshow'].includes(status))return false;
+ if(!state.events.includes(e)){toast('Seans kaydı değişti. Yeniden açıp kontrol et.');return false;}
+ if(leaveConflicts(e).length){toast('Önce izin çakışmasını iptal veya erteleme ile çöz.');return false;}
  if(eventFinish(e)>Date.now()){toast('Gelecekteki veya devam eden seans henüz sonuçlandırılamaz.');return false;}
  const account=e.customerId==null||String(e.customerId)===String(state.customer.id)?state:(state.customerAccounts||{})[e.customerId];
  count=status==='completed'||!!count;
- const previous={status:e.status,counts:e.counts,reason:e.noShowReason||'',note:e.noShowNote||''};
+ const previous={status:e.status,counts:e.counts,reason:e.noShowReason||'',note:e.noShowNote||'',muscleGroups:[...(Array.isArray(e.muscleGroups)?e.muscleGroups:[])]};
+ const nextGroups=Array.isArray(groups)?[...new Set(groups)]:previous.muscleGroups;
  const before=e.packageDebit??(account?.package&&(e.status==='completed'||e.status==='noshow'&&e.counts)?1:0);
  const after=count&&account?.package?1:0;
- if(previous.status===status&&!!previous.counts===count&&previous.reason===reason&&previous.note===note)return false;
- e.status=status;e.counts=count;e.muscleGroups=Array.isArray(groups)?groups:(Array.isArray(e.muscleGroups)?e.muscleGroups:[]);e.resolvedAt=new Date().toISOString();e.resolvedBy='pt';
+ if(previous.status===status&&!!previous.counts===count&&previous.reason===reason&&previous.note===note&&JSON.stringify([...previous.muscleGroups].sort())===JSON.stringify([...nextGroups].sort())){toast('Kaydedilecek değişiklik yok.');return false;}
+ e.status=status;e.counts=count;e.muscleGroups=nextGroups;e.resolvedAt=new Date().toISOString();e.resolvedBy='pt';
  if(status==='noshow'){e.noShowReason=reason;e.noShowNote=note;}
  else{delete e.noShowReason;delete e.noShowNote;}
  if(account?.package)account.package.usedSessions=Math.max(0,account.package.usedSessions+after-before);
  e.packageDebit=after;
  const hours=Number(state.ptProfile.confirmHours)||24;
  e.confirmation={status:'pending',createdAt:e.resolvedAt,deadline:new Date(Date.now()+hours*3600000).toISOString()};
- const audit={at:e.resolvedAt,by:'pt',previous,next:{status,counts:count,reason,note},confirmation:e.confirmation};
+ const audit={at:e.resolvedAt,by:'pt',previous,next:{status,counts:count,reason,note,muscleGroups:[...nextGroups]},confirmation:e.confirmation};
  (e.resultHistory||(e.resultHistory=[])).push(audit);
  const label=s=>s==='completed'?'Tamamlandı':s==='noshow'?'No Show':'Planlı';
  if(account){account.financeHistory=account.financeHistory||[];account.financeHistory.push({date:iso(new Date()),text:'Seans sonucu güncellendi',detail:`${e.date} · ${e.title} · ${label(previous.status)} → ${label(status)} · ${count?'Seans sayıldı':'Seans sayılmadı'} · ${new Date(e.resolvedAt).toLocaleString('tr-TR')}`,eventId:e.id,...audit});}
@@ -1268,16 +1270,16 @@ function renderResultApprovals(){
  card.querySelectorAll('[data-result-dispute]').forEach(b=>b.onclick=()=>respond(+b.dataset.resultDispute,'disputed'));
 }
 function editSessionResult(id){
- const e=state.events.find(x=>x.id===id);
+ const e=state.events.find(x=>String(x.id)===String(id));
  if(state.role!=='pt'||!e||e.type!=='session'||!['completed','noshow'].includes(e.status))return;
  openModal(`<h3>Seans sonucunu düzenle</h3><p>${escapeHtml(eventCustomer(e))} · ${formatShort(e.date)}</p><div class="field"><label>Sonuç</label><select id="resultStatus"><option value="completed">Tamamlandı</option><option value="noshow">No Show</option></select></div><div id="resultNoShow"><div class="field"><label>Seans paketten düşsün mü?</label><select id="resultCount"><option value="yes">Evet</option><option value="no">Hayır</option></select></div><div class="field"><label>Neden / Not</label><textarea id="resultNote">${escapeHtml(e.noShowNote||e.noShowReason||'')}</textarea></div></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveResultEdit">Kaydet</button></div>`);
  modal.querySelector('#resultStatus').parentElement.insertAdjacentHTML('afterend',musclePickerHtml(e.muscleGroups,'resultMuscleGroups'));
  const status=modal.querySelector('#resultStatus');status.value=e.status;
  modal.querySelector('#resultCount').value=e.counts?'yes':'no';
  const toggle=()=>modal.querySelector('#resultNoShow').hidden=status.value!=='noshow';status.onchange=toggle;toggle();
- modal.querySelector('#saveResultEdit').onclick=()=>{const ns=status.value==='noshow';recordSessionResult(e,status.value,!ns||modal.querySelector('#resultCount').value==='yes',ns?(e.noShowReason||'No Show'):'',ns?modal.querySelector('#resultNote').value:'',readMusclePicker('resultMuscleGroups'));closeModal();render();toast('Seans sonucu kaydedildi.');};
+ modal.querySelector('#saveResultEdit').onclick=()=>{const ns=status.value==='noshow';if(!recordSessionResult(e,status.value,!ns||modal.querySelector('#resultCount').value==='yes',ns?(e.noShowReason||'No Show'):'',ns?modal.querySelector('#resultNote').value:'',readMusclePicker('resultMuscleGroups')))return;closeModal();render();toast('Seans sonucu kaydedildi.');};
 }
-document.addEventListener('click',e=>{const button=e.target.closest('[data-edit-result]');if(button)editSessionResult(+button.dataset.editResult)});
+document.addEventListener('click',e=>{const button=e.target.closest('[data-edit-result]');if(button)editSessionResult(button.dataset.editResult)});
 function completeSession(id){const e=state.events.find(x=>x.id===id);if(!e||eventFinish(e)>Date.now()){toast('Seans tamamlandı olarak yalnızca seans bittikten sonra işaretlenebilir.');return;}if(!recordSessionResult(e,'completed',true))return;toast('Seans tamamlandı olarak kaydedildi.');render();}
 function openNoShow(id){const e=state.events.find(x=>x.id===id);if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned')return;if(eventFinish(e)>Date.now()){toast('No Show yalnızca seans bittikten sonra işaretlenebilir.');return;}openModal(`<h3>No Show işlemi</h3><div class="notice">Mazerete göre bu seansı paketten düşebilir veya düşmeyebilirsin.</div><div class="field"><label>Müşteri durumu</label><select id="nsReason"><option>Mazeretsiz gelmedi</option><option>Mazeretli gelmedi</option><option>Geç iptal</option><option>PT iptali</option></select></div><div class="field"><label>Seans paketten düşsün mü?</label><select id="nsCount"><option value="yes">Evet, seans say</option><option value="no">Hayır, sayma</option></select></div><div class="field"><label>Not</label><textarea id="nsNote" rows="3" placeholder="Opsiyonel not"></textarea></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="saveNs">No Show Kaydet</button></div>`);modal.querySelector('#saveNs').onclick=()=>{const count=modal.querySelector('#nsCount').value==='yes';if(!recordSessionResult(e,'noshow',count,modal.querySelector('#nsReason').value,modal.querySelector('#nsNote').value))return;closeModal();toast('No Show kaydedildi.');render();}}
 
