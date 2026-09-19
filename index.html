@@ -14,6 +14,9 @@
 button,input,select,textarea{font:inherit} button{cursor:pointer}
 .brandMark,.authLogo{white-space:nowrap}
 .brandPrefix{font-size:.55em;letter-spacing:-.04em;color:var(--green);margin-right:.08em}
+.brandConnection{font-size:.46em;font-weight:650;letter-spacing:-.02em;color:var(--green2);margin-left:.08em}
+.brandConnection.isOffline{color:#a66412}
+@media(max-width:480px){.app .topbar{flex-wrap:wrap;min-height:68px;height:auto;padding-block:10px;gap:8px}.topbar .userbox{margin-left:auto}}
 .emojiPicker{border:1px solid var(--line);border-radius:14px;padding:12px;margin:8px 0;min-width:0;background:#fff}
 .emojiFilters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.emojiFilters select{flex:1;min-width:120px;max-width:100%}
 .emojiGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:4px;max-height:240px;overflow:auto;margin:8px 0;overscroll-behavior:contain}
@@ -134,7 +137,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><div class="brandMark"><span class="brandPrefix">my</span>P<i>i</i>ti</div><div class="tag">PT’nle arandaki her şey.</div></div>
+    <div class="brand"><div class="brandMark"><span class="brandPrefix">my</span>P<i>i</i>ti<span class="brandConnection" role="status" aria-live="polite">.online</span></div><div class="tag">PT’nle arandaki her şey.</div></div>
     <div class="userbox">
       <div class="seg" id="roleSeg"><button data-role="pt" class="active">PT</button><button data-role="member">Müşteri</button></div>
       <button class="pill" id="resetBtn">Verileri temizle</button>
@@ -150,7 +153,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 <div class="toast" id="toast"></div>
 <div class="authBack" id="authBack">
  <form class="authCard" id="authForm">
-  <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti</div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
+  <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti<span class="brandConnection" role="status" aria-live="polite">.online</span></div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
   <div class="field" id="registrationName" hidden><label for="authName">Ad Soyad</label><input class="input" id="authName" autocomplete="name"></div>
   <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
   <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
@@ -802,9 +805,7 @@ function activateSession(session){
    document.querySelector('#authBack').hidden=true;
    document.querySelector('#roleSeg').hidden=true;
    document.querySelector('#resetBtn').hidden=true;
-   let badge=document.querySelector('#cloudBadge');
-   if(!badge){badge=document.createElement('span');badge.id='cloudBadge';badge.className='cloudBadge';document.querySelector('.userbox').prepend(badge)}
-   badge.textContent='Buluta bağlı';
+   updateBrandConnection();
    if(!document.querySelector('#logoutBtn')){const out=document.createElement('button');out.className='pill';out.id='logoutBtn';out.textContent='Çıkış';out.onclick=async()=>{try{const {error}=await db.auth.signOut();if(error)throw error}catch(error){toast('Çıkış yapılamadı: '+error.message)}};document.querySelector('.userbox').append(out)}
    authMessage('');
    if(typeof openPendingClientInvite==='function')openPendingClientInvite();
@@ -813,6 +814,14 @@ function activateSession(session){
  })().finally(()=>{sessionActivation=null});
  return sessionActivation;
 }
+function updateBrandConnection(){
+ const online=navigator.onLine!==false;
+ document.querySelectorAll('.brandConnection').forEach(el=>{el.textContent=online?'.online':'.offline';el.classList.toggle('isOffline',!online);el.setAttribute('aria-label',online?'İnternet bağlantısı var':'İnternet bağlantısı yok');el.title=online?'İnternet bağlantısı var':'İnternet bağlantısı yok'});
+ document.getElementById('cloudBadge')?.remove();
+}
+window.addEventListener('online',updateBrandConnection);
+window.addEventListener('offline',updateBrandConnection);
+updateBrandConnection();
 async function initAuth(){
  let registering=false;
  const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
