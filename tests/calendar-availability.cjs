@@ -21,6 +21,12 @@ try{
  assert.equal(w.testRun("state.events.filter(e=>e.type==='availability').length"),0);
  assert.equal(w.testRun('state.events.length'),2,'archived customer records remain intact');
  reset();assert.ok(d.querySelector('[data-delete-calendar="slot-2"]'));
+ assert.ok(d.querySelector('#leavePanel [data-list-edit-calendar="slot-2"]'));
+ assert.ok(d.querySelector('#leavePanel [data-list-delete-calendar="slot-2"]'));
+ assert.equal(d.querySelector('#leavePanel [data-list-delete-calendar="member-leave"]'),null);
+ d.querySelector('#leavePanel [data-list-edit-calendar="slot-2"]').click();assert.ok(d.querySelector('#saveEventEdit'));w.testRun('closeModal()');
+ d.querySelector('#leavePanel [data-list-delete-calendar="slot-2"]').click();assert.ok(d.querySelector('#deleteCalendarScope'));assert.equal(w.testRun('state.events.length'),8);w.testRun('closeModal()');
+ assert.equal(d.querySelector('#leavePanel [data-list-edit-calendar]').dataset.listEditCalendar,'slot-1','summary is chronological');
  d.querySelector('[data-delete-calendar="slot-2"]').click();assert.equal(w.testRun('state.events.length'),8,'opening confirmation cannot delete');
  assert.equal(d.querySelector('#deleteCalendarScope').value,'single');
  d.querySelector('#confirmDeleteCalendar').click();assert.equal(w.testRun('state.events.length'),7);assert.equal(w.testRun("state.events.some(e=>e.id==='slot-2')"),false);
