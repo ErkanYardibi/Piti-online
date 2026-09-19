@@ -1,0 +1,20 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom');
+const fs=require('fs'),assert=require('assert/strict');
+(async()=>{
+ const source=fs.readFileSync('assets/trainer-transfer.js','utf8');
+ assert.ok(fs.readFileSync('index.html','utf8').includes('// BEGIN trainer transfer module\n'+source.trimEnd()+'\n// END trainer transfer module'),'embedded module must match its source');
+ const html=fs.readFileSync('index.html','utf8').replace('<script src="/vendor/supabase.min.js"></script>','').replace('<script src="/assets/trainer-transfer.js"></script>','<script>'+source+'</script>').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();');
+ const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
+ const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.supabase={createClient:()=>({from(){throw Error('DEMO touched production')},rpc(){throw Error('DEMO touched production')}})};}});
+ const w=dom.window,d=w.document;w.fixture=JSON.parse(fs.readFileSync('assets/demo-state.json','utf8'));
+ w.testRun("state=clone(window.fixture);demoMode=true;authUser=null;state.role='member';state.page='trainer';render()");
+ assert.ok(d.querySelector('#openTransfer'));d.querySelector('#openTransfer').click();d.querySelector('#transferCode').value='DEMO-PT-GECIS';await d.querySelector('#previewTransfer').onclick();
+ assert.ok(d.querySelector('#confirmTransfer'));assert.equal(d.querySelector('#shareTransferMeasurements').checked,false);
+ await d.querySelector('#acceptTransfer').onclick();assert.match(d.querySelector('#transferError').textContent,/onayla/);
+ d.querySelector('#confirmTransfer').checked=true;await d.querySelector('#acceptTransfer').onclick();
+ assert.equal(w.testRun('state.memberTrainer.name'),'Demo Yeni PT');assert.equal(w.testRun('state.progressData.length'),0);assert.equal(w.testRun('state.package'),null);
+ await w.testRun('openTransferHistory()');assert.ok(d.querySelector('[data-transfer-history]'));d.querySelector('[data-transfer-history]').click();assert.match(d.querySelector('#modal').textContent,/geçmiş/);
+ w.testRun("closeModal();state.role='pt';state.page='customers';render()");d.querySelector('#demoTransferSwitch').click();assert.ok(d.querySelector('#transferNotices'));assert.match(d.querySelector('#transferNotices').textContent,/başka bir PT/);
+ await d.querySelector('[data-transfer-ack]').onclick();assert.equal(d.querySelector('#transferNotices'),null);
+ assert.deepEqual(errors,[]);dom.window.close();console.log('PASS: shared transfer screens, explicit consent, private measurements, retained history, former PT notice and acknowledgement without production access');
+})().catch(e=>{console.error(e);process.exit(1)});
