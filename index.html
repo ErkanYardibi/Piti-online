@@ -142,6 +142,9 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .heroTrainer{position:relative;z-index:2;margin:14px 0 0 auto;display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px;background:#fff;color:var(--text);font-size:12px;font-weight:750;text-align:left}
 .heroTrainerAvatar{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--greenSoft)}.heroTrainerAvatar img{width:100%;height:100%;object-fit:cover}
 @media(max-width:480px){.homeEvent.photoEvent{padding:18px;min-height:255px}.heroContent{width:76%}.heroContent .homeEventTitle{font-size:23px}.heroContent .homeEventMeta{font-size:12px}.heroContent .sectionTitle{font-size:16px}.heroFade{background:linear-gradient(90deg,#fff 10%,rgba(255,255,255,.97) 39%,rgba(255,255,255,.73) 62%,rgba(255,255,255,.06) 100%)}.heroPhoto{left:32%}}
+.adminMetrics{margin-bottom:22px}.adminMetric{display:flex;align-items:flex-start;gap:12px}.adminMetric strong{display:block;font-size:28px;margin:6px 0}.adminMetricIcon{display:grid;place-items:center;background:var(--greenSoft);color:var(--green2);padding:10px;border-radius:12px}.adminMetricIcon svg{width:22px;height:22px}
+.adminOverview{display:grid;gap:20px}.adminDashboardBottom{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px}.adminDashboardBottom>*{min-width:0}.adminLegend{display:flex;gap:14px;font-size:13px}.adminLegend span{display:flex;align-items:center;gap:6px}.adminLegend i{width:9px;height:9px;border-radius:50%}.adminGrowthChart{overflow-x:auto}.adminGrowthChart svg{display:block;width:100%;min-width:420px}.adminRecent{display:flex;align-items:center;gap:10px;padding:14px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}.adminRecent b{flex:1;min-width:100px;overflow-wrap:anywhere}.adminRecent time{font-size:12px;color:var(--muted)}.adminSystemRow{display:flex;justify-content:space-between;gap:10px;padding:10px 0;font-size:14px}.adminTableCard{overflow-x:auto}.adminTableCard #adminSearchForm{margin-bottom:18px;justify-content:flex-start}.adminTableCard #adminSearch{max-width:360px}.adminTableCard td .btn{margin:3px;white-space:nowrap}
+@media(max-width:720px){.adminDashboardBottom{grid-template-columns:1fr}.adminMetric{padding:14px;gap:8px}.adminMetricIcon{padding:6px}.adminMetric strong{font-size:24px}}
 </style>
 </head>
 <body>
@@ -712,8 +715,9 @@ setInterval(async()=>{
  catch{authUser=null;clearTimeout(cloudSyncTimer);document.querySelector('#authBack').hidden=false;view.innerHTML='';authMessage('Oturumun sona erdi. Yeniden giriş yap.')}
 },30000);
 
-let adminMode=false,adminTab='users',adminPage=0,adminSearch='';
+let adminMode=false,adminTab='dashboard',adminPage=0,adminSearch='',adminRenderSequence=0;
 async function adminRpc(action,args={}){
+ if(['dashboard','trainers','members'].includes(action)){const {data,error}=await db.rpc('admin_insights',{p_view:action,p_page:args.page||0,p_search:args.search||''});if(error)throw error;return data;}
  if(action==='recovery'){const {data,error}=await db.rpc('recovery_status');if(error)throw error;return data;}
  if(['demo','demo_versions','save_demo','restore_demo'].includes(action)){
   const {data:sessionData,error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
@@ -754,20 +758,36 @@ async function showAdminMfa(){
  }catch(e){gate.querySelector('#mfaError').textContent=e.message}
 }
 const adminDate=v=>v?new Date(v).toLocaleString('tr-TR'):'—';
+function adminSummaryCards(s){return `<div class="grid4 adminMetrics">${[['Toplam PT',s.trainers,'trainer'],['Müşteri hesabı',s.clients,'users'],['Toplam kullanıcı',s.users,'user'],['Çevrimiçi',s.online,'spark']].map(([label,value,icon])=>`<div class="card adminMetric"><span class="adminMetricIcon">${navIcon(icon)}</span><div><div class="small muted">${label}</div><strong>${Number(value||0).toLocaleString('tr-TR')}</strong>${label==='Çevrimiçi'?'<div class="small muted">Son 90 saniye</div>':''}</div></div>`).join('')}</div>`}
+function adminGrowthHtml(rows){
+ if(!rows.length)return '<div class="empty">Büyüme verisi bulunamadı.</div>';
+ const max=Math.max(1,...rows.flatMap(r=>[Number(r.trainers)||0,Number(r.members)||0]));
+ const x=i=>48+i*632/Math.max(1,rows.length-1),y=v=>190-160*(Number(v)||0)/max;
+ const lines=[['trainers','#19b778','PT'],['members','#3b82f6','Müşteri']].map(([key,color,label])=>`<polyline fill="none" stroke="${color}" stroke-width="3" points="${rows.map((r,i)=>x(i)+','+y(r[key])).join(' ')}"/>${rows.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r[key])}" r="4" fill="${color}"><title>${escapeHtml(r.month)} · ${label}: ${Number(r[key])||0}</title></circle>`).join('')}`).join('');
+ return `<div class="adminGrowthChart"><svg viewBox="0 0 720 230" role="img" aria-label="Son 12 ayda kayıt tarihine göre birikimli PT ve müşteri hesabı sayıları">${[0,.5,1].map(v=>`<line x1="48" y1="${y(v*max)}" x2="680" y2="${y(v*max)}" stroke="#e5eaee"/><text x="38" y="${y(v*max)+4}" text-anchor="end" fill="#536071" font-size="12">${Math.round(max*v)}</text>`).join('')}${lines}${rows.map((r,i)=>i%2===0||i===rows.length-1?`<text x="${x(i)}" y="216" text-anchor="middle" fill="#536071" font-size="12">${escapeHtml(r.month.slice(5))}/${escapeHtml(r.month.slice(2,4))}</text>`:'').join('')}</svg></div><details class="small"><summary>Sayısal veriler</summary><table class="table"><thead><tr><th>Ay</th><th>PT</th><th>Müşteri</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHtml(r.month)}</td><td>${Number(r.trainers)||0}</td><td>${Number(r.members)||0}</td></tr>`).join('')}</tbody></table></details>`;
+}
+function adminDashboardHtml(data){return `<section class="card"><div class="toolbar"><div><h2 class="sectionTitle">Kullanıcı Büyümesi</h2><div class="small muted">Son 12 ay · Mevcut hesapların kayıt tarihine göre birikimli sayısı</div></div><div class="adminLegend"><span><i style="background:#19b778"></i>PT</span><span><i style="background:#3b82f6"></i>Müşteri</span></div></div>${adminGrowthHtml(data.growth||[])}</section><div class="adminDashboardBottom"><section class="card"><div class="toolbar"><h2 class="sectionTitle">Son Kayıt Olan PT’ler</h2><button class="btn ghost sm" data-admin-open="trainers">Tümünü gör</button></div>${(data.recent_trainers||[]).map(p=>`<div class="adminRecent"><span class="personAvatar">${escapeHtml(profileInitials(p.full_name))}</span><b>${escapeHtml(p.full_name)}</b><time>${adminDate(p.created_at)}</time></div>`).join('')||'<p class="muted">Henüz PT kaydı yok.</p>'}</section><section class="card"><h2 class="sectionTitle">Sistem Özeti</h2><div class="adminSystemRow"><span>Bu ay yeni kullanıcı</span><b>${Number(data.new_this_month)||0}</b></div><div class="adminSystemRow"><span>Aktif müşteri kaydı</span><b>${Number(data.client_records)||0}</b></div><p class="small muted">Müşteri kayıtları, henüz hesabı bağlanmamış kişileri de içerir.</p><hr style="border:0;border-top:1px solid var(--line)"><h3>Yedekleme</h3><p id="adminBackupSummary" class="small muted" role="status">Durum kontrol ediliyor…</p><button class="btn ghost sm" data-admin-open="recovery">Kopyaları görüntüle</button></section></div>`}
 async function renderAdmin(){
  renderTestLauncher();
- const tabs={users:'Kullanıcılar',links:'PT–Müşteri',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'Demo Yönetimi',recovery:'Geri Dönüş Kopyaları',settings:'Ayarlar'};
- sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="btn ${adminTab===k?'primary':'ghost'}" data-admin-tab="${k}" style="margin:4px">${v}</button>`).join('');
- sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;renderAdmin()});
- view.innerHTML='<h1>ADMIN</h1><p>Yükleniyor…</p>';
+ const request=++adminRenderSequence;
+ const tabs={dashboard:'Genel Bakış',users:'Kullanıcılar',trainers:'PT’ler',members:'Müşteri Hesapları',links:'PT–Müşteri Bağlantıları',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'DEMO Yönetimi',recovery:'Yedekleme',settings:'Ayarlar'};
+ const icons={dashboard:'home',users:'users',trainers:'trainer',members:'user',links:'users',sessions:'calendar',audit:'progress',logins:'calendar',demo_versions:'spark',recovery:'wallet',settings:'user'};
+ sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="navBtn ${adminTab===k?'active':''}" data-admin-tab="${k}" aria-label="${v}" ${adminTab===k?'aria-current="page"':''}><span class="navIcon">${navIcon(icons[k])}</span><span class="navText">${v}</span></button>`).join('');
+ sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;adminSearch='';renderAdmin()});
+ view.innerHTML='<div class="toolbar"><div><h1>'+tabs[adminTab]+'</h1><p class="muted">myPiti yönetim paneli</p></div><span class="status green">ADMIN</span></div><p role="status">Yükleniyor…</p>';
  try{
   const summary=await adminRpc('overview');
   const rows=await adminRpc(adminTab,{page:adminPage,search:adminSearch});
-  view.innerHTML=`<h1>Yönetim Paneli</h1><p class="muted">${summary.users} kullanıcı · ${summary.trainers} PT · ${summary.clients} müşteri · ${summary.online} çevrimiçi</p><h2>${tabs[adminTab]}</h2><div id="adminContent" class="card" style="overflow-x:auto"></div><div id="adminPagination" class="rightActions" style="margin-top:16px"><button class="btn ghost" id="adminPrev" ${adminPage===0?'disabled':''}>Önceki</button><span>${adminPage+1}. sayfa</span><button class="btn ghost" id="adminNext" ${!Array.isArray(rows)||rows.length<50?'disabled':''}>Sonraki</button><button class="btn ghost" id="adminRefresh">Yenile</button></div><p id="adminError" role="alert"></p>`;
+  if(request!==adminRenderSequence||!adminMode)return;
+  view.innerHTML=`<div class="toolbar"><div><h1>${tabs[adminTab]}</h1><div class="muted">myPiti yönetim paneli</div></div><span class="status green">ADMIN · Çift doğrulama</span></div>${adminSummaryCards(summary)}<div id="adminContent" class="${adminTab==='dashboard'?'adminOverview':'card adminTableCard'}"></div><div id="adminPagination" class="rightActions" style="margin-top:16px"><button class="btn ghost" id="adminPrev" ${adminPage===0?'disabled':''} ${!Array.isArray(rows)?'hidden':''}>Önceki</button><span ${!Array.isArray(rows)?'hidden':''}>${adminPage+1}. sayfa</span><button class="btn ghost" id="adminNext" ${!Array.isArray(rows)||rows.length<50?'disabled':''} ${!Array.isArray(rows)?'hidden':''}>Sonraki</button><button class="btn ghost" id="adminRefresh">Yenile</button></div><p id="adminError" role="alert"></p>`;
   const c=view.querySelector('#adminContent');
   const table=(headers,items)=>'<table class="table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+items.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
   const e=escapeHtml;
-  if(adminTab==='users'){
+  if(adminTab==='dashboard'){
+   c.innerHTML=adminDashboardHtml(rows||{});
+   c.querySelectorAll('[data-admin-open]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminOpen;adminPage=0;adminSearch='';renderAdmin()});
+   adminRpc('recovery').then(r=>{if(request!==adminRenderSequence||!adminMode)return;const box=c.querySelector('#adminBackupSummary');if(box)box.textContent=r.stale?'Güncel doğrulanmış kopya yok. Kontrol gerekli.':'Doğrulanmış geri dönüş kopyası mevcut.'}).catch(()=>{if(request===adminRenderSequence){const box=c.querySelector('#adminBackupSummary');if(box)box.textContent='Yedekleme durumu alınamadı.'}});
+  }else if(['users','trainers','members'].includes(adminTab)){
    c.innerHTML='<form id="adminSearchForm" class="rightActions"><input class="input" id="adminSearch" placeholder="İsim, kullanıcı adı veya e-posta" value="'+e(adminSearch)+'"><button class="btn ghost">Ara</button></form>'+table(['Kullanıcı','Tür / durum','Kayıt / son giriş','Son etkinlik','İşlemler'],rows.map(u=>[
     `<b>${e(u.full_name)}</b><br>${e(u.username||'—')}<br><small>${e(u.email)}</small>`,e(u.is_admin?'ADMIN':u.role==='pt'?'PT':'Müşteri')+'<br>'+e(u.archived?'Arşivde':u.suspended?'Askıda':'Aktif'),adminDate(u.created_at)+'<br>'+adminDate(u.last_sign_in_at),(u.last_seen&&Date.now()-new Date(u.last_seen)<90000?'🟢 Çevrimiçi<br>':'')+adminDate(u.last_seen),u.is_admin?'—':`<button class="btn ghost sm" data-admin-action="password" data-id="${u.id}">Şifre sıfırla</button><button class="btn ghost sm" data-admin-action="revoke_user" data-id="${u.id}">Tüm oturumları kapat</button><button class="btn ghost sm" data-admin-action="${u.suspended||u.archived?'restore':'suspend'}" data-id="${u.id}">${u.suspended||u.archived?'Yeniden aç':'Askıya al'}</button><button class="btn ghost sm" data-admin-action="archive" data-id="${u.id}">Arşivle</button>`]));
    c.querySelector('#adminSearchForm').onsubmit=ev=>{ev.preventDefault();adminSearch=c.querySelector('#adminSearch').value;adminPage=0;renderAdmin()};
@@ -795,7 +815,7 @@ async function renderAdmin(){
    try{await adminRpc(action,action==='revoke_session'?{session_id:id}:{user_id:id});await renderAdmin()}catch(err){view.querySelector('#adminError').textContent=err.message;b.disabled=false}
   });
   view.querySelector('#adminPrev').onclick=()=>{adminPage--;renderAdmin()};view.querySelector('#adminNext').onclick=()=>{adminPage++;renderAdmin()};view.querySelector('#adminRefresh').onclick=()=>renderAdmin();
- }catch(e){view.innerHTML='<h1>Yönetim Paneli</h1><p role="alert">'+escapeHtml(e.message)+'</p>'}
+ }catch(e){if(request===adminRenderSequence&&adminMode)view.innerHTML='<h1>Yönetim Paneli</h1><p role="alert">'+escapeHtml(e.message)+'</p><button class="btn ghost" id="adminRetry">Tekrar dene</button>';view.querySelector('#adminRetry')?.addEventListener('click',()=>renderAdmin())}
 }
 function adminPasswordDialog(id){
  openModal('<h3>Geçici şifre belirle</h3><p>Kullanıcının oturumları kapatılır. Sonraki girişte kendi şifresini belirlemesi gerekir.</p><input class="input" id="adminNewPassword" type="password" autocomplete="new-password" minlength="6"><p id="adminPasswordError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="adminPasswordSave">Şifreyi sıfırla</button></div>');
