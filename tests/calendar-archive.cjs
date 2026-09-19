@@ -55,5 +55,23 @@ try{
  w.testRun('state.customer.archived=false');assert.equal(w.testRun('overdueTasks().length'),2);
  w.testRun('state.customer.archived=true;state.customer.dbId=String(state.customer.id);window.active.dbId=String(window.active.id);cloudTasks=state.demoChat.tasks;demoMode=false');
  assert.equal(w.testRun('overdueTasks().length'),1,'live and demo task filtering must agree');
- assert.deepEqual(errors,[]);console.log('PASS: archived sessions and leave hidden, explicit archive view works, stale filter resets, history retained, reactivation restores visibility');
+ w.testRun(`demoMode=true;authUser=null;state=clone(window.fixture);state.role='pt';state.page='dashboard';state.customer.archived=true;state.archiveViews={};
+ window.active=financeCustomers().find(c=>String(c.id)!==String(state.customer.id));window.active.archived=false;state.payment.status='pending';
+ state.events=[{id:'archived-request',type:'session',status:'requested',customerId:state.customer.id,title:'ArchivedRequestMarker',date:iso(new Date()),time:'15:00'},
+ {id:'active-request',type:'session',status:'requested',customerId:window.active.id,title:'ActiveRequestMarker',date:iso(new Date()),time:'16:00'},
+ {id:'archived-notice',type:'memberoff',status:'off',customerId:state.customer.id,title:'ArchivedNoticeMarker',date:iso(new Date()),time:'Tüm gün'}];dashboard();renderLeavePanel();`);
+ assert.equal(w.testRun('pendingAppointments().length'),1);
+ assert.ok(!w.testRun('pendingPayments().some(c=>c.archived)'));
+ assert.ok(!contents().includes('ArchivedRequestMarker'));assert.ok(!contents().includes('ArchivedNoticeMarker'));
+ assert.ok(contents().includes('ActiveRequestMarker'));
+ w.testRun("state.archiveViews.dashboard=true;dashboard();renderLeavePanel()");
+ assert.equal(w.testRun('pendingAppointments().length'),2);
+ assert.ok(contents().includes('ArchivedRequestMarker'));assert.ok(contents().includes('ArchivedNoticeMarker'));
+ w.testRun("state.page='messages';state.chatCustomerId=state.customer.id");
+ assert.notEqual(w.testRun('selectedChatCustomer().id'),w.testRun('state.customer.id'));
+ w.testRun('state.archiveViews.messages=true');assert.equal(w.testRun('selectedChatCustomer().id'),w.testRun('state.customer.id'));
+ w.testRun("state.page='finance';state.financeCustomerId=state.customer.id;finance()");
+ assert.notEqual(w.testRun('financeAccount().customer.id'),w.testRun('state.customer.id'));
+ w.testRun("financeCustomers().forEach(c=>c.archived=true);finance()");assert.ok(contents().includes('Gösterilecek müşteri yok.'));
+ assert.deepEqual(errors,[]);console.log('PASS: archive filtering for calendar, home, requests, payments, tasks, leave, chat and finance; explicit archive views and history preservation');
 }finally{dom.window.close();}

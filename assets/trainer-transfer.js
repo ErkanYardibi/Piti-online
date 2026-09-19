@@ -32,7 +32,7 @@ function renderTransferControls(){
   const selected=financeCustomers().find(c=>String(c.id)===String(state.page==='customerProfile'?(state.customerProfileId||state.customer.id):(state.financeCustomerId||state.customer.id)));
   if(selected?.relationshipEndedAt){
    if(state.page==='customerProfile')view.querySelectorAll('#saveCustomerProfile,#customerPhoto').forEach(x=>x.disabled=true);
-   if(state.page==='finance')view.querySelectorAll('input,textarea,button:not([data-finance-customer])').forEach(x=>x.disabled=true);
+   if(state.page==='finance')view.querySelectorAll('input:not([data-archive-view]),textarea,button:not([data-finance-customer])').forEach(x=>x.disabled=true);
   }
   view.querySelectorAll('[data-archive-customer],[data-delete-customer]').forEach(b=>{const id=b.dataset.archiveCustomer||b.dataset.deleteCustomer;if(financeCustomers().find(c=>String(c.id)===id)?.relationshipEndedAt){b.disabled=true;b.title='Sona ermiş PT ilişkisi salt okunurdur.';}});
  }
