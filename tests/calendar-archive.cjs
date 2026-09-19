@@ -40,5 +40,20 @@ try{
  assert.ok(w.testRun('nextEventHtml()').includes('Yaklaşan etkinlik yok.'));
  w.testRun('state.customer.archived=false');
  assert.equal(w.testRun('nextEvent().id'),'archive-session');
+ // Active task widgets exclude archives; raw history and completed weigh-ins survive.
+ w.testRun(`state.customer.archived=true;window.active.archived=false;state.progressData=[];
+ state.demoChat={messages:[],tasks:[
+ {id:'archived-task',client_id:String(state.customer.id),title:'ArchivedTaskMarker',status:'pending',due_at:'2000-01-01T12:00:00Z'},
+ {id:'active-task',client_id:String(window.active.id),title:'ActiveTaskMarker',status:'pending',due_at:'2000-01-01T12:00:00Z'},
+ {id:'weigh-history',client_id:String(state.customer.id),title:'Tartıl',status:'done',response_type:'kg',result:'80',completed_at:'2026-09-01T12:00:00Z'}]};openLiveOverdueTasks();`);
+ assert.equal(w.testRun('overdueTasks().length'),1);
+ assert.ok(!d.querySelector('#modal').textContent.includes('ArchivedTaskMarker'));
+ assert.ok(d.querySelector('#modal').textContent.includes('ActiveTaskMarker'));
+ assert.equal(w.testRun('currentTaskRows().length'),3);
+ assert.equal(w.testRun("progressMeasurements().find(x=>x.taskId==='weigh-history').w"),80);
+ assert.ok(!w.testRun('memberTasksHtml()').includes('ArchivedTaskMarker'));
+ w.testRun('state.customer.archived=false');assert.equal(w.testRun('overdueTasks().length'),2);
+ w.testRun('state.customer.archived=true;state.customer.dbId=String(state.customer.id);window.active.dbId=String(window.active.id);cloudTasks=state.demoChat.tasks;demoMode=false');
+ assert.equal(w.testRun('overdueTasks().length'),1,'live and demo task filtering must agree');
  assert.deepEqual(errors,[]);console.log('PASS: archived sessions and leave hidden, explicit archive view works, stale filter resets, history retained, reactivation restores visibility');
 }finally{dom.window.close();}
