@@ -31,5 +31,14 @@ try{
  assert.equal(w.testRun('state.events.length'),7,'hiding archived customers must preserve history');
  assert.equal(w.testRun("calendarEventForCustomer({type:'session'})"),false,'legacy primary customer events are hidden');
  w.testRun('state.customer.archived=false;calendar()');assert.ok(contents().includes('ArchivedSessionMarker'));
+ // Home must ignore archived clients regardless of the calendar archive toggle/filter.
+ w.testRun("state.customer.archived=true;state.calendarShowArchived=true;state.calendarCustomerFilter=String(state.customer.id);state.events=state.events.filter(e=>e.type==='session');state.events.forEach(e=>e.date='2099-09-21')");
+ assert.equal(w.testRun('nextEvent().id'),'active-session');
+ assert.ok(!w.testRun('nextEventHtml()').includes('ArchivedSessionMarker'));
+ w.testRun('window.active.archived=true');
+ assert.equal(w.testRun('nextEvent()'),undefined);
+ assert.ok(w.testRun('nextEventHtml()').includes('Yaklaşan etkinlik yok.'));
+ w.testRun('state.customer.archived=false');
+ assert.equal(w.testRun('nextEvent().id'),'archive-session');
  assert.deepEqual(errors,[]);console.log('PASS: archived sessions and leave hidden, explicit archive view works, stale filter resets, history retained, reactivation restores visibility');
 }finally{dom.window.close();}

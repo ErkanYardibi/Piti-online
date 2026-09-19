@@ -785,7 +785,9 @@ function migrateDemoSessions(){
 state.demoCustomers.forEach((c,i)=>{const id=900001+i;if(!state.events.some(e=>e.id===id))state.events.push({id,date:c.session.completed?iso(addDays(today,-1)):(c.session.date||date),time:c.session.time,title:c.session.title,type:'session',status:c.session.status||(c.session.completed?'completed':'planned'),customerId:c.id,customerName:c.name,createdBy:'pt',counts:!!c.session.completed});});
  state.sessionResultsVersion=1;save();
 }
-function homeEvents(){return state.events.filter(e=>state.role==='pt'||isMemberEvent(e)||(e.type==='demo'&&String(e.customerId)===String(state.customer.id)));}
+function eventClientId(e){return e.customerId??(String(e.createdBy||'').startsWith('member:')?e.createdBy.slice(7):['session','memberoff','demo'].includes(e.type)?state.customer.id:null);}
+function eventClient(e){const id=eventClientId(e);return id==null?null:financeCustomers().find(c=>String(c.id)===String(id)||(c.dbId!=null&&String(c.dbId)===String(id)));}
+function homeEvents(){return state.events.filter(e=>state.role==='pt'?!eventClient(e)?.archived:isMemberEvent(e)||(e.type==='demo'&&String(e.customerId)===String(state.customer.id)));}
 function needsResult(e,now=Date.now()){return e.type==='session'&&e.status==='planned'&&!leaveConflicts(e).length&&eventFinish(e)<=now;}
 function resultActions(e){return `<div class="rightActions"><button class="btn sm primary" data-complete-session="${e.id}">Tamamlandı</button><button class="btn sm amber" data-noshow="${e.id}">No Show</button></div>`;}
 function resultAlertsHtml(){const pending=homeEvents().filter(e=>needsResult(e)).sort((a,b)=>eventStart(a)-eventStart(b));return pending.length?`<section class="latePanel" aria-label="Sonuç bekleyen seanslar"><h2>⚠ Sonuç Bekleyen Seanslar (${pending.length})</h2><div class="lateDetail">Seans süresi geçti. Tamamlandı veya No Show olarak işaretle.</div>${pending.map(e=>`<div class="lateRow"><div><b>${escapeHtml(eventCustomer(e))}</b><div class="lateDetail">${formatShort(e.date)} · ${escapeHtml(eventTime(e))} · ${escapeHtml(e.title)}</div><span class="status amber">Sonuç bekliyor</span></div>${resultActions(e)}</div>`).join('')}</section>`:'';}
@@ -969,8 +971,7 @@ function trainer(){view.innerHTML=`<div class="toolbar"><div><h1>PT’im</h1><di
 function calendarEventForCustomer(e){
  if(state.role!=='pt')return true;
  const f=state.calendarCustomerFilter;
- const id=e.customerId??(String(e.createdBy||'').startsWith('member:')?e.createdBy.slice(7):['session','memberoff','demo'].includes(e.type)?state.customer.id:null);
- const customer=id==null?null:financeCustomers().find(c=>String(c.id)===String(id)||(c.dbId!=null&&String(c.dbId)===String(id)));
+ const id=eventClientId(e),customer=eventClient(e);
  if(!state.calendarShowArchived&&customer?.archived)return false;
  if(f==='pt_self')return id==null&&isPTOffEntry(e);
  if(!f||f==='all')return true;
