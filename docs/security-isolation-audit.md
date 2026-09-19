@@ -15,9 +15,9 @@ Status: initial database review and first remediation complete; NOT a complete s
 
 ## Remaining review
 
-- Frontend cloud loading and saving use mutable global account state across asynchronous boundaries. The start-of-save ownership check alone is insufficient proof of race safety; test logout/login, demo entry, and delayed requests at each await boundary.
+- Cloud loading/saving now rechecks user identity, state reference and DEMO/admin mode after asynchronous requests. `tests/account-transition.test.cjs` verifies delayed-save cancellation and delayed-load rejection. Other UI-specific asynchronous handlers still need review.
 - Review all privileged RPC bodies, payment/package write privileges, storage policies, and account-state JSON ownership. The session tests above do not establish these are safe.
-- Shared DEMO UI still obtains its published fixture from the production project's `demo_state`; a physically separate backend is not yet provisioned.
+- DEMO storage has since been moved to the separate Free project; see `docs/demo-testing.md`.
 - Existing change-audit triggers need recovery-coverage and retention review, especially complete before/after images and uploaded files.
 - Run browser-level regressions in addition to SQL tests before declaring the audit complete.
 
@@ -47,4 +47,4 @@ Database backups do not include Storage object contents. A daily backup can stil
 
 Source: https://supabase.com/docs/guides/platform/backups
 
-No paid service, off-site data transfer, production data restore, or scheduled backup was started in this pass.
+The subsequent recovery step added daily same-database application snapshots, typed temporary-table restore verification, seven-copy retention and an admin status page. See `docs/recovery-and-trainer-transfer.md` for scope and exclusions. No paid service, off-site data transfer or production data restore was started. Redundant TRUNCATE/REFERENCES/TRIGGER grants have been removed from public/anon/authenticated.

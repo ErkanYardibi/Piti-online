@@ -193,6 +193,10 @@ function sessionStatusToDb(s){return s==='noshow'?'no_show':(['planned','complet
 function sessionStatusFromDb(s){return s==='no_show'?'noshow':s}
 function eventTimestamp(date,time){return new Date(`${date}T${/^\d\d:\d\d$/.test(time||'')?time:'00:00'}:00`).toISOString()}
 let cloudSyncChain=Promise.resolve();
+function liveContextGuard(){
+ const owner=authUser?.id,snapshot=state;
+ return ()=>{if(!owner||authUser?.id!==owner||state!==snapshot||demoMode||adminMode)throw Error('Hesap değişti. İşlem durduruldu.');};
+}
 function syncCloudData(){
  const owner=authUser?.id,snapshot=state;
  const job=cloudSyncChain.catch(()=>{}).then(()=>{if(authUser?.id!==owner||state!==snapshot)return;return syncCloudDataNow()});
@@ -201,52 +205,61 @@ function syncCloudData(){
 async function syncCloudDataNow(){
  if(!authUser||demoMode||!db)return;
  if(adminMode||liveStateOwner!==authUser.id||state.cloudOwner!==authUser.id||state.demoFixtureVersion||state.demoCloudVersion||Object.keys(state.customerAccounts||{}).some(k=>/^(demo-|test-customer-)/.test(k)))throw Error('Hesap verisi doğrulanamadı. Sayfayı yenileyip tekrar giriş yap.');
+ const ensureCurrent=liveContextGuard();
  const profile=state.role==='pt'?state.ptProfile:state.customer;
  const {error:profileError}=await db.from('profiles').update({full_name:profile.name||authUser.email,phone:profile.phone||null,avatar_url:profile.photo||null}).eq('id',authUser.id);
- if(profileError)throw profileError;
+ ensureCurrent();if(profileError)throw profileError;
  const customers=state.role==='pt'?[state.customer,...(state.manualCustomers||[])].filter(c=>c.cloudManaged):[state.customer];
  for(const c of customers){
   const existed=!!c.dbId,row=cloudCustomerRow(c,state.role==='pt'?authUser.id:(c.ptId||null),state.role==='member'?authUser.id:(c.userId||null));
   let result;
   if(existed){delete row.user_id;delete row.pt_id;result=await db.from('clients').update(row).eq('id',c.dbId)}
   else {result=await db.from('clients').insert(row);if(result.error)delete c.dbId}
-  if(result.error)throw result.error;
+  ensureCurrent();if(result.error)throw result.error;
  }
  const byLocal=new Map(customers.map(c=>[String(c.id),c]));
  const sessions=(state.events||[]).filter(e=>e.type==='session'&&byLocal.has(String(e.customerId))).map(e=>{const c=byLocal.get(String(e.customerId));e.dbId=e.dbId||uuid();return {id:e.dbId,client_id:c.dbId,pt_id:state.role==='pt'?authUser.id:(e.ptId||c.ptId||null),starts_at:eventTimestamp(e.date,e.time),ends_at:e.endTime?eventTimestamp(e.date,e.endTime):null,status:sessionStatusToDb(e.status),workout_title:e.title||null,muscle_groups:Array.isArray(e.muscleGroups)?e.muscleGroups:[],salon:e.location||null,notes:e.note||e.sessionNote||null,counts_against_package:e.counts!==false,updated_at:new Date().toISOString()}});
- if(sessions.length){const {error}=await db.from('sessions').upsert(sessions,{onConflict:'id'});if(error)throw error}
- await syncClientHistories(customers);
+ if(sessions.length){const {error}=await db.from('sessions').upsert(sessions,{onConflict:'id'});ensureCurrent();if(error)throw error}
+ await syncClientHistories(customers);ensureCurrent();
  const {error:stateError}=await db.from('account_state').upsert({user_id:authUser.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
- if(stateError)throw stateError;
+ ensureCurrent();if(stateError)throw stateError;
  persistState();
 }
 function mapCloudCustomer(c){return {id:c.id,dbId:c.id,name:c.full_name,initials:(c.full_name||'?').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase(),phone:c.phone||'',email:c.email||'',blood:c.blood_type||'',gender:c.gender||'',weight:Number(c.weight)||'',height:Number(c.height)||'',archived:!!c.archived,status:'active',appAccess:c.user_id?'registered':'manual',userId:c.user_id,ptId:c.pt_id,cloudManaged:true}}
 async function loadCloudData(){
  liveStateOwner=null;
+ let ensureCurrent=liveContextGuard();ensureCurrent();
  const pending=JSON.parse(localStorage.getItem('pitiPendingProfile')||'null');
  let {data:profile}=await db.from('profiles').select('*').eq('id',authUser.id).maybeSingle();
+ ensureCurrent();
  if(!profile)throw Error('Hesap profili bulunamadı. Yeniden giriş yap.');
  const {data:cloudState,error:cloudStateError}=await db.from('account_state').select('data').eq('user_id',authUser.id).maybeSingle();
+ ensureCurrent();
  if(cloudStateError)throw cloudStateError;
  if(cloudState?.data&&typeof cloudState.data==='object')state=cloudState.data;
  else {state=emptyLiveState();state.ptProfile.name=profile.full_name}
+ ensureCurrent=liveContextGuard();
  let migratedLegacy=false;
  try{const legacy=JSON.parse(localStorage.getItem('pitiAccount:'+authUser.id)||'null');if(legacy?.cloudOwner===authUser.id&&profile.role==='pt'&&legacy.ptProfile){const current=state.ptProfile,old=legacy.ptProfile;if(!current.photo&&old.photo){current.photo=old.photo;migratedLegacy=true}if((!current.bio||current.bio===seed.ptProfile.bio)&&old.bio){current.bio=old.bio;migratedLegacy=true}if((!current.specialties||current.specialties===seed.ptProfile.specialties)&&old.specialties){current.specialties=old.specialties;migratedLegacy=true}if((!current.locations?.length||JSON.stringify(current.locations)===JSON.stringify(seed.ptProfile.locations))&&old.locations?.length){current.locations=old.locations;migratedLegacy=true}if(!current.confirmHours&&old.confirmHours){current.confirmHours=old.confirmHours;migratedLegacy=true}}}catch{}
  state.cloudOwner=authUser.id;state.loginUsername=profile.username||'';
  localStorage.removeItem('pitiPendingProfile');state.role=profile.role==='member'?'member':'pt';state.page=state.role==='pt'?'dashboard':'today';
  const priorCustomers=[state.customer,...(state.manualCustomers||[])];syncTestAccount();
- if(state.role==='pt'){state.ptProfile.name=profile.full_name;state.ptProfile.photo=profile.avatar_url||state.ptProfile.photo||'';const {data:clients,error}=await db.from('clients').select('*').eq('pt_id',authUser.id).order('created_at');if(error)throw error;for(const old of priorCustomers){if(old.dbId&&!clients.some(c=>c.id===old.dbId))forgetCustomer(old)}if(clients?.length){const mapped=clients.map(mapCloudCustomer);for(const c of mapped){const old=priorCustomers.find(x=>(x.dbId||x.id)===c.id);if(old){state.customerAccounts[c.id]=state.customerAccounts[old.id]||{};state.events.forEach(e=>{if(String(e.customerId)===String(old.id))e.customerId=c.id});}}state.customer=mapped[0];state.manualCustomers=mapped.slice(1).concat(priorCustomers.filter(x=>x.cloudManaged&&!x.dbId));state.demoCustomers=[]}}
- else {let {data:client,error}=await db.from('clients').select('*').eq('user_id',authUser.id).maybeSingle();if(error)throw error;if(!client){const created=await db.from('clients').insert({user_id:authUser.id,full_name:profile.full_name,email:authUser.email?.endsWith('@accounts.mypiti.invalid')?null:authUser.email}).select().single();if(created.error)throw created.error;client=created.data}state.customer={...mapCloudCustomer(client),photo:profile.avatar_url||state.customer?.photo||''};state.manualCustomers=[];state.demoCustomers=[];state.customerAccounts={};state.events=[];Object.assign(state,emptyClientHistory())}
- const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');if(sessionsError)throw sessionsError;
+ if(state.role==='pt'){state.ptProfile.name=profile.full_name;state.ptProfile.photo=profile.avatar_url||state.ptProfile.photo||'';const {data:clients,error}=await db.from('clients').select('*').eq('pt_id',authUser.id).order('created_at');ensureCurrent();if(error)throw error;for(const old of priorCustomers){if(old.dbId&&!clients.some(c=>c.id===old.dbId))forgetCustomer(old)}if(clients?.length){const mapped=clients.map(mapCloudCustomer);for(const c of mapped){const old=priorCustomers.find(x=>(x.dbId||x.id)===c.id);if(old){state.customerAccounts[c.id]=state.customerAccounts[old.id]||{};state.events.forEach(e=>{if(String(e.customerId)===String(old.id))e.customerId=c.id});}}state.customer=mapped[0];state.manualCustomers=mapped.slice(1).concat(priorCustomers.filter(x=>x.cloudManaged&&!x.dbId));state.demoCustomers=[]}}
+ else {let {data:client,error}=await db.from('clients').select('*').eq('user_id',authUser.id).maybeSingle();ensureCurrent();if(error)throw error;if(!client){const created=await db.from('clients').insert({user_id:authUser.id,full_name:profile.full_name,email:authUser.email?.endsWith('@accounts.mypiti.invalid')?null:authUser.email}).select().single();ensureCurrent();if(created.error)throw created.error;client=created.data}state.customer={...mapCloudCustomer(client),photo:profile.avatar_url||state.customer?.photo||''};state.manualCustomers=[];state.demoCustomers=[];state.customerAccounts={};state.events=[];Object.assign(state,emptyClientHistory())}
+ const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');ensureCurrent();if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
  const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
- state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy)await syncCloudDataNow();localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
+ state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();ensureCurrent();await loadMemberTrainer();ensureCurrent();await loadClientInvitations();ensureCurrent();await loadLiveTasks();ensureCurrent();liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy){await syncCloudDataNow();ensureCurrent();}localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
 }
+let demoLoadSequence=0;
 async function loadDemoData(){
+ const sequence=++demoLoadSequence,owner=authUser?.id;
+ const ensureDemo=()=>{if(sequence!==demoLoadSequence||!demoMode||authUser?.id!==owner)throw Error('Hesap değişti. Demo yüklemesi durduruldu.');};
  liveStateOwner=null;clearTimeout(cloudSyncTimer);
  let next=null,version=0;
  if(demoDb){try{const {data,error}=await demoDb.from('demo_state').select('data,version').eq('id','main').maybeSingle();if(error)throw error;if(data?.data&&typeof data.data==='object'){next=data.data;version=data.version}}catch{}}
- if(!next){const response=await fetch('/assets/demo-state.json');if(!response.ok)throw Error('Demo verileri yüklenemedi.');next=await response.json();}
+ ensureDemo();
+ if(!next){const response=await fetch('/assets/demo-state.json');ensureDemo();if(!response.ok)throw Error('Demo verileri yüklenemedi.');next=await response.json();ensureDemo();}
  state=next;state.demoCloudVersion=version;state.calCursor=new Date(today.getFullYear(),today.getMonth(),1).toISOString();state.selectedDate=iso(today);
  state.tasks=(state.tasks||[]).map(t=>({...t,date:t.date||iso(today)}));state.invite=state.invite||{ptCode:'MEHMET-4821',oneTimeCodes:[],pending:[],approved:[]};
  for(const request of state.invite.pending||[])request.created=request.created||iso(today);
@@ -266,17 +279,21 @@ function clientHistoryPayload(c){
  return out;
 }
 async function syncClientHistories(customers){
+ const ensureCurrent=liveContextGuard();ensureCurrent();
  for(const c of customers){
   if(!c.dbId||(!c.ptId&&state.role==='member'))continue;
   const data=clientHistoryPayload(c),old=cloudHistoryOriginal[c.dbId];
   if(JSON.stringify(data)===JSON.stringify(old))continue;
   const result=await db.rpc('save_client_history',{p_client_id:c.dbId,p_data:data,p_version:cloudHistoryVersions[c.dbId]||0});
+  ensureCurrent();
   if(result.error)throw result.error;
   cloudHistoryVersions[c.dbId]=result.data;cloudHistoryOriginal[c.dbId]=clone(data);
  }
 }
 async function loadClientHistories(){
+ const ensureCurrent=liveContextGuard();ensureCurrent();
  const {data,error}=await db.from('client_history').select('client_id,data,version');if(error)throw error;
+ ensureCurrent();
  cloudHistoryVersions={};cloudHistoryOriginal={};
  for(const row of data||[]){
   const c=[state.customer,...(state.manualCustomers||[])].find(c=>c.dbId===row.client_id);if(!c)continue;
@@ -293,19 +310,22 @@ async function loadClientHistories(){
 }
 async function loadMemberTrainer(){
  if(state.role!=='member')return;
+ const ensureCurrent=liveContextGuard();ensureCurrent();
  // Relationship comes from clients.pt_id; history snapshots never establish it.
  const client=state.customer;
  state.memberTrainer={name:client.ptId?'PT’im':'Henüz PT bağlantısı yok',code:'',status:client.ptId?'connected':'unlinked'};
  if(!client.ptId)return;
  const {data,error}=await db.rpc('get_my_trainer');
+ ensureCurrent();
  if(error||!data||data.client_id!==client.dbId||data.id!==client.ptId){state.memberTrainer.loadError=true;return}
  state.memberTrainer={id:data.id,name:data.name||'PT’im',code:'',status:'connected'};
  syncTestAccount();
 }
 async function loadClientInvitations(){
  clientInvitations=[];if(state.role!=='pt')return;
+ const ensureCurrent=liveContextGuard();ensureCurrent();
  const {data,error}=await db.from('client_invitations').select('id,client_id,email,expires_at,used_at,revoked_at').order('created_at',{ascending:false});
- if(error)throw error;clientInvitations=data||[];
+ ensureCurrent();if(error)throw error;clientInvitations=data||[];
 }
 function clientLinkStatus(c){
  if(c.userId)return 'Hesabı bağlı';
@@ -574,6 +594,7 @@ setInterval(async()=>{
 
 let adminMode=false,adminTab='users',adminPage=0,adminSearch='';
 async function adminRpc(action,args={}){
+ if(action==='recovery'){const {data,error}=await db.rpc('recovery_status');if(error)throw error;return data;}
  if(['demo','demo_versions','save_demo','restore_demo'].includes(action)){
   const {data:sessionData,error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
   const token=sessionData.session?.access_token;if(!token)throw Error('Admin oturumu gerekli.');
@@ -615,7 +636,7 @@ async function showAdminMfa(){
 const adminDate=v=>v?new Date(v).toLocaleString('tr-TR'):'—';
 async function renderAdmin(){
  renderTestLauncher();
- const tabs={users:'Kullanıcılar',links:'PT–Müşteri',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'Demo Yönetimi',settings:'Ayarlar'};
+ const tabs={users:'Kullanıcılar',links:'PT–Müşteri',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'Demo Yönetimi',recovery:'Geri Dönüş Kopyaları',settings:'Ayarlar'};
  sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="btn ${adminTab===k?'primary':'ghost'}" data-admin-tab="${k}" style="margin:4px">${v}</button>`).join('');
  sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;renderAdmin()});
  view.innerHTML='<h1>ADMIN</h1><p>Yükleniyor…</p>';
@@ -634,6 +655,9 @@ async function renderAdmin(){
   else if(adminTab==='sessions')c.innerHTML='<p class="muted">Çevrimiçi: son 90 saniyede etkinlik. Açık oturum, uygulamanın şu anda kullanıldığı anlamına gelmez.</p>'+table(['Kullanıcı','Cihaz / IP','Açılış / son etkinlik','İşlem'],rows.map(r=>[e(r.full_name),e(r.user_agent||'—')+'<br>'+e(r.ip||'—'),adminDate(r.created_at)+'<br>'+adminDate(r.last_seen),`<button class="btn ghost" data-admin-action="revoke_session" data-id="${r.id}">Oturumu kapat</button>`]));
   else if(adminTab==='audit')c.innerHTML='<p class="muted">Bu özellik etkinleştirildikten sonraki değişiklikler kaydedilir. Şifre ve mesaj içerikleri kayda yazılmaz.</p>'+table(['Zaman','Kullanıcı','İşlem','Kayıt / alanlar'],rows.map(r=>[adminDate(r.created_at),e(r.actor||'Sistem'),e(r.entity+' · '+r.action),e(r.record_id||'')+'<br>'+e((r.changed_fields||[]).join(', '))]));
   else if(adminTab==='logins')c.innerHTML='<p class="muted">Kimlik doğrulama sisteminin tuttuğu olaylar. Kaydedilmeyen başarısız denemeler burada görünmeyebilir.</p>'+table(['Zaman','Kullanıcı','Olay','IP'],rows.map(r=>[adminDate(r.created_at),e(r.username||r.actor_id||'—'),e(r.action||'—'),e(r.ip_address||'—')]));
+  else if(adminTab==='recovery'){
+   c.innerHTML=`<p class="status ${rows.stale?'red':'green'}">${rows.stale?'Güncel doğrulanmış kopya yok — kontrol gerekli.':'Doğrulanmış geri dönüş kopyası mevcut.'}</p><p>${e(rows.schedule)} · Son 7 başarılı kopya saklanır.</p><p>${e(rows.scope)}</p><p class="small muted">Doğrulama: kayıtlar geçici tablolara yüklenip içerikleri karşılaştırılır. Canlı veriye geri yükleme yapılmaz. İlk zamanlanmış çalışma henüz gerçekleşmemiş olabilir.</p>${rows.last_job?'<p>Son zamanlanmış işlem: '+e(rows.last_job.status)+' · '+adminDate(rows.last_job.start_time)+'</p>':''}`+table(['Kopya zamanı','Boyut','Doğrulama'],(rows.copies||[]).map(r=>[adminDate(r.created_at),Math.ceil(r.bytes/1024)+' KB',adminDate(r.verified_at)]));
+  }
   else if(adminTab==='demo_versions'){
    c.innerHTML='<p>Ortak demo verilerini düzenleyebilir veya önceki kayıtlı sürümü geri yükleyebilirsin.</p><button class="btn primary" id="editSharedDemo">Demoyu düzenle</button>'+table(['Kayıt zamanı','İşlem'],rows.map(r=>[adminDate(r.created_at),`<button class="btn ghost" data-restore-demo="${r.id}">Bu sürümü geri yükle</button>`]));
    c.querySelector('#editSharedDemo').onclick=async()=>{try{const snapshot=await adminRpc('demo');state=clone(snapshot.data);demoMode=true;adminMode=false;render();document.querySelector('.userbox').insertAdjacentHTML('beforeend','<div class="card" id="demoAdminControls"><b>Admin demo düzenlemesi</b><p>Değişiklikler Kaydet düğmesine kadar yayınlanmaz.</p><button class="btn primary" id="saveSharedDemo">Kaydet ve dön</button><button class="btn ghost" id="cancelSharedDemo">Vazgeç</button></div>');const finish=()=>{document.querySelector('#demoAdminControls')?.remove();demoMode=false;adminMode=true;renderAdmin()};document.querySelector('#cancelSharedDemo').onclick=finish;document.querySelector('#saveSharedDemo').onclick=async()=>{try{await adminRpc('save_demo',{data:state,version:snapshot.version});finish()}catch(e){toast(e.message)}}}catch(e){toast(e.message)}};
