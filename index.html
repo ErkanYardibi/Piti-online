@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PiTi</title>
+<title>myPiti</title>
 <style>
 :root{
   --bg:#f5f7f8; --card:#fff; --text:#122033; --muted:#6f7b8b; --line:#e5eaee;
@@ -12,6 +12,8 @@
 }
 *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text)}
 button,input,select,textarea{font:inherit} button{cursor:pointer}
+.brandMark,.authLogo{white-space:nowrap}
+.brandPrefix{font-size:.55em;letter-spacing:-.04em;color:var(--green);margin-right:.08em}
 .app{min-height:100vh}.topbar{position:sticky;top:0;z-index:20;height:68px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
 .brand{display:flex;align-items:center;gap:10px}.brandMark{font-size:30px;font-weight:900;letter-spacing:-1.4px}.brandMark i{font-style:normal;color:var(--green)}.tag{color:var(--muted);font-size:14px}.userbox{display:flex;align-items:center;gap:10px}.avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#d8e7ff,#d7faea);display:grid;place-items:center;font-weight:800}.pill{border:1px solid var(--line);background:#fff;padding:8px 12px;border-radius:999px;color:var(--text)}
 .shell{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px)}.sidebar{background:#fff;border-right:1px solid var(--line);padding:18px 12px}.navBtn{width:100%;border:0;background:transparent;padding:12px 14px;border-radius:12px;display:flex;align-items:center;gap:10px;color:#526071;margin:3px 0;text-align:left}.navBtn.active{background:var(--greenSoft);color:var(--green2);font-weight:700}.navBtn:hover{background:#f3f6f7}.navIcon{width:24px;text-align:center}.content{padding:26px;max-width:1480px;width:100%;margin:0 auto}
@@ -128,7 +130,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><div class="brandMark">P<i>i</i>ti</div><div class="tag">PT’nle arandaki her şey.</div></div>
+    <div class="brand"><div class="brandMark"><span class="brandPrefix">my</span>P<i>i</i>ti</div><div class="tag">PT’nle arandaki her şey.</div></div>
     <div class="userbox">
       <div class="seg" id="roleSeg"><button data-role="pt" class="active">PT</button><button data-role="member">Müşteri</button></div>
       <button class="pill" id="resetBtn">Verileri temizle</button>
@@ -144,7 +146,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 <div class="toast" id="toast"></div>
 <div class="authBack" id="authBack">
  <form class="authCard" id="authForm">
-  <div class="authLogo">P<i>i</i>ti</div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
+  <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti</div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
   <div class="field" id="registrationName" hidden><label for="authName">Ad Soyad</label><input class="input" id="authName" autocomplete="name"></div>
   <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
   <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
