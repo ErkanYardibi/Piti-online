@@ -10,6 +10,16 @@ try{
  state.events.push({id:'other-slot',type:'availability',createdBy:'pt',date:state.selectedDate,time:'14:00',endTime:'15:00',title:'Other',status:'open'},
  {id:'session',type:'session',customerId:state.customer.id,createdBy:'pt',date:state.selectedDate,time:'16:00',title:'Session',status:'planned'},
  {id:'member-leave',type:'memberoff',customerId:state.customer.id,createdBy:'member:'+state.customer.id,date:state.selectedDate,time:'Tüm gün',title:'Leave',status:'off'});calendar();`);
+ reset();
+ w.testRun("financeCustomers().forEach(c=>c.archived=true);state.calendarShowArchived=false;state.calendarCustomerFilter='pt_self';calendar()");
+ assert.ok(d.querySelector('[data-delete-calendar="slot-2"]'),'own calendar includes open availability');
+ assert.ok(d.querySelector('[data-delete-calendar="other-slot"]'),'own calendar includes standalone availability');
+ w.testRun("deleteCalendarEntry('slot-2')");d.querySelector('#deleteCalendarScope').value='group';d.querySelector('#confirmDeleteCalendar').click();
+ w.testRun("deleteCalendarEntry('other-slot')");d.querySelector('#confirmDeleteCalendar').click();
+ w.testRun("state.calendarCustomerFilter='all';calendar()");
+ assert.equal(d.querySelectorAll('[data-delete-calendar]').length,0,'switching to all cannot reveal other PT availability after deletion');
+ assert.equal(w.testRun("state.events.filter(e=>e.type==='availability').length"),0);
+ assert.equal(w.testRun('state.events.length'),2,'archived customer records remain intact');
  reset();assert.ok(d.querySelector('[data-delete-calendar="slot-2"]'));
  d.querySelector('[data-delete-calendar="slot-2"]').click();assert.equal(w.testRun('state.events.length'),8,'opening confirmation cannot delete');
  assert.equal(d.querySelector('#deleteCalendarScope').value,'single');

@@ -979,7 +979,7 @@ function calendarEventForCustomer(e){
  const f=state.calendarCustomerFilter;
  const id=eventClientId(e),customer=eventClient(e);
  if(!state.calendarShowArchived&&customer?.archived)return false;
- if(f==='pt_self')return id==null&&isPTOffEntry(e);
+ if(f==='pt_self')return id==null&&(e.type==='availability'||isPTOffEntry(e));
  if(!f||f==='all')return true;
  if(id!=null)return String(id)===String(f)||String(customer?.id)===String(f);
  return e.type==='off'||e.type==='availability';
