@@ -137,8 +137,9 @@ const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağu
 const today = new Date(); today.setHours(0,0,0,0);
 const SUPABASE_URL='https://objwhegswugyeibcnjfr.supabase.co';
 const SUPABASE_KEY='sb_publishable_iPbwiRE8tlh07UAATv-N8g_feL79rDt';
-const db=window.supabase?.createClient(SUPABASE_URL,SUPABASE_KEY);
+const db=window.supabase?.createClient(SUPABASE_URL,SUPABASE_KEY,{global:{headers:{'x-piti-state-version':'1'}}});
 let authUser=null,cloudSyncTimer=null,demoMode=false;
+let liveStateOwner=null;
 const iso = d => { const x=new Date(d); x.setHours(12,0,0,0); return x.toISOString().slice(0,10); };
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:0}).format(n);
@@ -178,7 +179,8 @@ function cleanDemoState(source){
  clean.testPrimaryId=customer.id;clean.testUsersVersion=1;clean.sessionResultsVersion=1;clean.futureSessionResultsVersion=1;clean.futureDemoResultsVersion=1;clean.demoResultDatesVersion=1;clean.duplicateTestSessionsVersion=1;clean.ptOffDedupeVersion=1;clean.customerArchiveView='active';clean.calendarCustomerFilter='all';clean.calendarShowArchived=false;clean.cleanDataVersion=1;
  return clean;
 }
-function load(){return clone(seed)}
+function emptyLiveState(){const s=cleanDemoState({customer:{id:'no-customer',name:'',photo:'',weight:'',status:'active'},ptProfile:{name:'',bio:'',specialties:'',locations:[],photo:'',confirmHours:24}});s.invite={ptCode:'',oneTimeCodes:[],pending:[],approved:[]};s.memberTrainer={name:'Henüz PT bağlantısı yok',code:'',status:'unlinked'};s.isolationVersion=1;return s}
+function load(){return emptyLiveState()}
 function persistState(){}
 function save(){syncTestAccount();persistState();queueCloudSync()}
 function queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast('Buluta kaydedilemedi: '+e.message)),650)}
@@ -189,11 +191,13 @@ function sessionStatusFromDb(s){return s==='no_show'?'noshow':s}
 function eventTimestamp(date,time){return new Date(`${date}T${/^\d\d:\d\d$/.test(time||'')?time:'00:00'}:00`).toISOString()}
 let cloudSyncChain=Promise.resolve();
 function syncCloudData(){
- const job=cloudSyncChain.catch(()=>{}).then(syncCloudDataNow);
+ const owner=authUser?.id,snapshot=state;
+ const job=cloudSyncChain.catch(()=>{}).then(()=>{if(authUser?.id!==owner||state!==snapshot)return;return syncCloudDataNow()});
  cloudSyncChain=job;return job;
 }
 async function syncCloudDataNow(){
  if(!authUser||demoMode||!db)return;
+ if(adminMode||liveStateOwner!==authUser.id||state.cloudOwner!==authUser.id||state.demoFixtureVersion||state.demoCloudVersion||Object.keys(state.customerAccounts||{}).some(k=>/^(demo-|test-customer-)/.test(k)))throw Error('Hesap verisi doğrulanamadı. Sayfayı yenileyip tekrar giriş yap.');
  const profile=state.role==='pt'?state.ptProfile:state.customer;
  const {error:profileError}=await db.from('profiles').update({full_name:profile.name||authUser.email,phone:profile.phone||null,avatar_url:profile.photo||null}).eq('id',authUser.id);
  if(profileError)throw profileError;
@@ -215,13 +219,14 @@ async function syncCloudDataNow(){
 }
 function mapCloudCustomer(c){return {id:c.id,dbId:c.id,name:c.full_name,initials:(c.full_name||'?').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase(),phone:c.phone||'',email:c.email||'',blood:c.blood_type||'',gender:c.gender||'',weight:Number(c.weight)||'',height:Number(c.height)||'',archived:!!c.archived,status:'active',appAccess:c.user_id?'registered':'manual',userId:c.user_id,ptId:c.pt_id,cloudManaged:true}}
 async function loadCloudData(){
+ liveStateOwner=null;
  const pending=JSON.parse(localStorage.getItem('pitiPendingProfile')||'null');
  let {data:profile}=await db.from('profiles').select('*').eq('id',authUser.id).maybeSingle();
  if(!profile)throw Error('Hesap profili bulunamadı. Yeniden giriş yap.');
  const {data:cloudState,error:cloudStateError}=await db.from('account_state').select('data').eq('user_id',authUser.id).maybeSingle();
  if(cloudStateError)throw cloudStateError;
  if(cloudState?.data&&typeof cloudState.data==='object')state=cloudState.data;
- else {state=cleanDemoState(seed);state.ptProfile={name:profile.full_name,bio:'',specialties:'',locations:[],photo:'',confirmHours:24}}
+ else {state=emptyLiveState();state.ptProfile.name=profile.full_name}
  let migratedLegacy=false;
  try{const legacy=JSON.parse(localStorage.getItem('pitiAccount:'+authUser.id)||'null');if(legacy?.cloudOwner===authUser.id&&profile.role==='pt'&&legacy.ptProfile){const current=state.ptProfile,old=legacy.ptProfile;if(!current.photo&&old.photo){current.photo=old.photo;migratedLegacy=true}if((!current.bio||current.bio===seed.ptProfile.bio)&&old.bio){current.bio=old.bio;migratedLegacy=true}if((!current.specialties||current.specialties===seed.ptProfile.specialties)&&old.specialties){current.specialties=old.specialties;migratedLegacy=true}if((!current.locations?.length||JSON.stringify(current.locations)===JSON.stringify(seed.ptProfile.locations))&&old.locations?.length){current.locations=old.locations;migratedLegacy=true}if(!current.confirmHours&&old.confirmHours){current.confirmHours=old.confirmHours;migratedLegacy=true}}}catch{}
  state.cloudOwner=authUser.id;state.loginUsername=profile.username||'';
@@ -232,9 +237,10 @@ async function loadCloudData(){
  const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
  const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
- state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();if(!cloudState||migratedLegacy)await syncCloudDataNow();localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
+ state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();await loadMemberTrainer();await loadClientInvitations();await loadLiveTasks();liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy)await syncCloudDataNow();localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
 }
 async function loadDemoData(){
+ liveStateOwner=null;clearTimeout(cloudSyncTimer);
  let next=null,version=0;
  if(db){try{const {data,error}=await db.from('demo_state').select('data,version').eq('id','main').maybeSingle();if(error)throw error;if(data?.data&&typeof data.data==='object'){next=data.data;version=data.version}}catch{}}
  if(!next){const response=await fetch('/assets/demo-state.json');if(!response.ok)throw Error('Demo verileri yüklenemedi.');next=await response.json();}
@@ -681,7 +687,7 @@ async function initAuth(){
  // Supabase calls must run after the auth callback releases its session lock.
  db.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
-  else if(session&&!authUser)setTimeout(()=>{if(!authUser&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
+  else if(session&&!authUser&&!demoMode)setTimeout(()=>{if(!authUser&&!demoMode&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
  });
  document.querySelector('#authForm').onsubmit=async e=>{
   e.preventDefault();if(registering)return registerAccount();if(!document.querySelector('#demoBtn').hidden){await document.querySelector('#demoBtn').onclick();return}setAuthBusy(true);authMessage('');
@@ -730,6 +736,7 @@ function eventCustomer(e){return e.customerName||(isMemberEvent(e)?state.custome
 function arrivalTime(e){return new Date(eventStart(e)+Number(e.delay.minutes)*60000).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
 function delayBadge(e){return hasDelay(e)?`<span class="lateBadge">◷ ${Number(e.delay.minutes)} dk gecikecek · Tahmini varış ${arrivalTime(e)}</span>`:'';}
 function migrateDemoSessions(){
+ if(!demoMode)return;
  if(state.sessionResultsVersion)return;
  const date=state.events.find(e=>e.id===3)?.date||iso(today);
 state.demoCustomers.forEach((c,i)=>{const id=900001+i;if(!state.events.some(e=>e.id===id))state.events.push({id,date:c.session.completed?iso(addDays(today,-1)):(c.session.date||date),time:c.session.time,title:c.session.title,type:'session',status:c.session.status||(c.session.completed?'completed':'planned'),customerId:c.id,customerName:c.name,createdBy:'pt',counts:!!c.session.completed});});
@@ -1318,6 +1325,7 @@ function repairDuplicatePTOffEntries(){
  if(JSON.stringify(state.events)!==before)save();
 }
 function repairDuplicateTestSessions(){
+ if(!demoMode)return;
  if(state.duplicateTestSessionsVersion)return;
  const generated=state.events.filter(e=>Number(e.id)>=800000&&Number(e.id)<800036&&['session','demo'].includes(e.type)&&['planned','requested'].includes(e.status)).sort((a,b)=>Number(a.id)-Number(b.id));
  const used=new Set();
@@ -1331,6 +1339,7 @@ function repairDuplicateTestSessions(){
  state.duplicateTestSessionsVersion=1;save();
 }
 function repairFutureSessionResults(){
+ if(!demoMode)return;
  if(state.futureSessionResultsVersion)return;
  for(const e of state.events){
   if(e.type!=='session'||!['completed','noshow'].includes(e.status)||eventFinish(e)<=Date.now())continue;
@@ -1346,6 +1355,7 @@ function repairFutureSessionResults(){
  state.futureSessionResultsVersion=1;save();
 }
 function repairFutureDemoResults(){
+ if(!demoMode)return;
  if(state.demoResultDatesVersion)return;
  for(const e of state.events){
   const seeded=(e.id===900001&&e.customerId==='demo-ayse')||(e.id>=800000&&e.id<=800035&&String(e.customerId).startsWith('test-customer-'));
@@ -1360,6 +1370,7 @@ function syncTestAccount(){
  ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'].forEach(k=>a[k]=state[k]);
 }
 function initTestUsers(){
+ if(!demoMode)return;
  repairDuplicateTestSessions();
  repairFutureSessionResults();
  repairFutureDemoResults();

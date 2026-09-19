@@ -1,0 +1,12 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom'),fs=require('fs'),assert=require('assert/strict');
+(async()=>{const html=fs.readFileSync('index.html','utf8').replace('<script src="/vendor/supabase.min.js"></script>','').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();maybeOpenJoinLink();initAuth();');let verified=false;const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.supabase={createClient:()=>({auth:{onAuthStateChange(){},getSession:async()=>({data:{session:null}}),mfa:{getAuthenticatorAssuranceLevel:async()=>({data:{currentLevel:verified?'aal2':'aal1'}}),listFactors:async()=>({data:{totp:[{id:'test',status:'verified'}]}}),challengeAndVerify:async({code})=>code==='123456'?(verified=true,{data:{}}):{error:{message:'Yanlış kod'}}}},rpc:async(name,args)=>{if(name==='app_settings')return {data:{registration_open:true}};if(name==='admin_console'){if(args.p_action==='overview')return {data:{users:1,trainers:1,clients:0,online:1}};return {data:[{id:'test',full_name:'Test <admin>',username:'test',role:'pt',email:'test@example.invalid',created_at:new Date().toISOString(),is_admin:true}]}}return {data:null}}})}}});const w=dom.window,d=w.document;await new Promise(r=>setTimeout(r,20));
+
+assert.equal(w.testRun('state.events.length'),0);assert.equal(w.testRun('state.ptProfile.name'),'');assert.equal(w.testRun('state.demoCustomers.length'),0);
+w.testRun("state=clone(seed);demoMode=false;authUser={id:'real-user'};state.cloudOwner='real-user';window.before=JSON.stringify(state);initTestUsers();migrateDemoSessions();repairDuplicateTestSessions();repairFutureSessionResults();repairFutureDemoResults()");
+assert.equal(w.testRun('JSON.stringify(state)'),w.before);
+await assert.rejects(w.testRun('syncCloudDataNow()'),/Hesap verisi/);
+w.testRun("liveStateOwner='real-user';state.demoFixtureVersion=1");
+await assert.rejects(w.testRun('syncCloudDataNow()'),/Hesap verisi/);
+w.testRun("authUser=null;demoMode=true;state=clone(seed);initTestUsers()");
+assert.ok(w.testRun('state.demoCustomers.length')>2);
+assert.deepEqual(errors,[]);dom.window.close();console.log('PASS: empty live startup; no demo generators in live accounts; unsafe cloud writes blocked; demo still works');})().catch(e=>{console.error(e);process.exit(1)});
