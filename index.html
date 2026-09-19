@@ -76,7 +76,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .card{border-radius:20px;box-shadow:0 8px 24px rgba(24,38,52,.06)}.kpi{position:relative;overflow:hidden;padding:16px 18px 15px}.kpi:after{content:'';position:absolute;right:-20px;top:-24px;width:76px;height:76px;border-radius:50%;background:var(--greenSoft);opacity:.7}.kpiIcon{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#eaf2ff;font-size:17px;margin-bottom:8px;position:relative;z-index:1}.kpiVal{font-size:30px;line-height:1.05}.kpiLabel{font-size:14px}.personCell{display:flex;align-items:center;gap:9px}.personAvatar{width:30px;height:30px;border-radius:50%;display:inline-grid;place-items:center;background:linear-gradient(135deg,#d8e7ff,#d7faea);font-size:12px;font-weight:850;flex:0 0 auto}.personAvatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}.table tbody tr{transition:background .15s}.table tbody tr:hover{background:#fbfefd}.eventItem{border-radius:16px;background:#fff}.homeEvent{border-left-width:6px;padding:20px}.homeEventTitle{font-size:26px}.homeEvent:before{content:'✦';float:right;color:var(--green);font-size:24px}
 .navIcon{width:24px;height:24px;display:grid;place-items:center;flex:0 0 24px}.navIcon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .archivedRow{opacity:.78;background:#fafbfc}.archivedRow .personAvatar{filter:grayscale(.5)}
-.authBack{position:fixed;inset:0;z-index:500;background:linear-gradient(145deg,#edf8ff,#e7f8f0);display:grid;place-items:center;padding:18px}.authBack[hidden]{display:none}.authCard{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 70px rgba(18,32,51,.18);padding:26px}.authLogo{font-size:38px;font-weight:900;letter-spacing:-2px}.authLogo i{font-style:normal;color:var(--green)}.authError{min-height:20px;color:#b22a27;font-size:13px;margin-top:10px}.cloudBadge{display:inline-flex;align-items:center;gap:6px;background:#eaf2ff;color:#225fc2;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:800}.cloudBadge:before{content:'●';color:#3b82f6}.authActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.authActions .demo{grid-column:1/-1}
+.authBack{position:fixed;inset:0;z-index:500;background:linear-gradient(145deg,#edf8ff,#e7f8f0);display:grid;place-items:center;padding:18px}.authBack[hidden]{display:none}.authCard{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 70px rgba(18,32,51,.18);padding:26px}.authLogo{font-size:38px;font-weight:900;letter-spacing:-2px}.authLogo i{font-style:normal;color:var(--green)}.authError{min-height:20px;color:#b22a27;font-size:13px;margin-top:10px}.cloudBadge{display:inline-flex;align-items:center;gap:6px;background:#eaf2ff;color:#225fc2;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:800}.cloudBadge:before{content:'●';color:#3b82f6}.authActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
 .day.weekend:not(.blocked):not(.selected){background:#f1f4f8}.week div:nth-child(n+6){color:#526681;font-weight:700}.day.weekend .dayNum{text-decoration:underline;text-underline-offset:4px}
 @media(max-width:640px){.customerActions{width:100%}.customerActions #manualCustomer{width:100%;min-height:48px}}
 
@@ -131,7 +131,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
   <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
   <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" required></div>
   <p class="small muted">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan. Şifreni unuttuysan PT’nden sıfırlamasını iste.</p><div class="authError" id="authError" role="alert"></div>
-  <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button><button class="btn ghost demo" type="button" id="demoBtn" hidden>Demo olarak devam et</button></div>
+  <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button></div>
  </form>
 </div>
 <script src="/vendor/supabase.min.js"></script>
@@ -720,11 +720,14 @@ function activateSession(session){
 }
 async function initAuth(){
  let registering=false;
- const updateDemo=()=>{document.querySelector('#demoBtn').hidden=registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO'};
- for(const id of ['#authEmail','#authPassword'])document.querySelector(id).addEventListener('input',updateDemo);
- const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('');updateDemo()};
+ const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
 
- document.querySelector('#demoBtn').onclick=async()=>{if(registering||document.querySelector('#authEmail').value!=='DEMO'||document.querySelector('#authPassword').value!=='DEMO')return;demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
+ const enterDemo=async()=>{demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
+ document.querySelector('#authForm').onsubmit=async e=>{
+  e.preventDefault();if(registering&&db)return registerAccount();if(document.querySelector('#authEmail').value==='DEMO'&&document.querySelector('#authPassword').value==='DEMO'){await enterDemo();return}if(!db){authMessage('Bağlantı yüklenemedi. Sayfayı yenileyip tekrar dene.');return}setAuthBusy(true);authMessage('');
+  try{const {data,error}=await signInWithIdentifier(document.querySelector('#authEmail').value.trim(),document.querySelector('#authPassword').value);if(error)throw error;if(data.session)await activateSession(data.session)}
+  catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
+ };
  if(db)db.rpc('app_settings').then(({data,error})=>{if(error||!data)return;const n=document.createElement('p');n.className='muted';n.textContent=[data.announcement,data.maintenance?'Uygulama bakımda.':''].filter(Boolean).join(' ');document.querySelector('#authForm').prepend(n);if(!data.registration_open)document.querySelector('#signUpBtn').hidden=true;});
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
  // Supabase calls must run after the auth callback releases its session lock.
@@ -732,11 +735,6 @@ async function initAuth(){
   if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
   else if(session&&!authUser&&!demoMode)setTimeout(()=>{if(!authUser&&!demoMode&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
  });
- document.querySelector('#authForm').onsubmit=async e=>{
-  e.preventDefault();if(registering)return registerAccount();if(!document.querySelector('#demoBtn').hidden){await document.querySelector('#demoBtn').onclick();return}setAuthBusy(true);authMessage('');
-  try{const {data,error}=await signInWithIdentifier(document.querySelector('#authEmail').value.trim(),document.querySelector('#authPassword').value);if(error)throw error;if(data.session)await activateSession(data.session)}
-  catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
- };
  document.querySelector('#signUpBtn').onclick=switchMode;
  const registerAccount=async()=>{
   const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;
