@@ -1,0 +1,35 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom'),fs=require('fs'),assert=require('assert/strict');
+(async()=>{const html=fs.readFileSync('index.html','utf8').replace('<script src="/vendor/supabase.min.js"></script>','').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();maybeOpenJoinLink();initAuth();');let verified=false;const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.supabase={createClient:()=>({auth:{onAuthStateChange(){},getSession:async()=>({data:{session:null}}),mfa:{getAuthenticatorAssuranceLevel:async()=>({data:{currentLevel:verified?'aal2':'aal1'}}),listFactors:async()=>({data:{totp:[{id:'test',status:'verified'}]}}),challengeAndVerify:async({code})=>code==='123456'?(verified=true,{data:{}}):{error:{message:'Yanlış kod'}}}},rpc:async(name,args)=>{if(name==='app_settings')return {data:{registration_open:true}};if(name==='admin_console'){if(args.p_action==='overview')return {data:{users:1,trainers:1,clients:0,online:1}};return {data:[{id:'test',full_name:'Test <admin>',username:'test',role:'pt',email:'test@example.invalid',created_at:new Date().toISOString(),is_admin:true}]}}return {data:null}}})}}});const w=dom.window,d=w.document;await new Promise(r=>setTimeout(r,20));
+
+
+w.fetch=async()=>({ok:true,json:async()=>JSON.parse(fs.readFileSync('assets/emoji-library.json','utf8'))});
+w.testRun("demoMode=true;authUser=null;state=clone(seed);initTestUsers();state.page='messages';state.role='pt';state.demoChat={messages:[],tasks:[]};window.demoDbCalls=0;db.from=()=>{window.demoDbCalls++;throw Error('Demo touched production')};messages()");
+await new Promise(r=>setTimeout(r,10));
+d.querySelector('#chatEmojiToggle').click();await new Promise(r=>setTimeout(r,20));
+assert.ok(d.querySelector('#emojiSearch'));
+d.querySelector('#emojiSearch').value='kalp';d.querySelector('#emojiSearch').dispatchEvent(new w.Event('input'));
+assert.ok(d.querySelectorAll('[data-emoji]').length>5);
+const i=d.querySelector('#msgInput');i.value='Merhaba !';i.setSelectionRange(8,8);const first=d.querySelector('[data-emoji]');first.click();assert.ok(i.value.includes(first.dataset.emoji));
+d.querySelector('#emojiSearch').value='zzzzzzzz';d.querySelector('#emojiSearch').dispatchEvent(new w.Event('input'));assert.equal(d.querySelectorAll('[data-emoji]').length,0);
+d.querySelector('#emojiSearch').value='';d.querySelector('#emojiSearch').dispatchEvent(new w.Event('input'));assert.equal(d.querySelectorAll('[data-emoji]').length,120);d.querySelector('#emojiMore').click();assert.equal(d.querySelectorAll('[data-emoji]').length,240);
+w.testRun("state.demoChat.tasks=[{id:'late1',client_id:String(state.customer.id),title:'Tartıl',status:'pending',due_at:'2020-01-01T12:00:00Z',response_type:'kg'},{id:'done1',client_id:String(state.customer.id),status:'done',due_at:'2020-01-01T12:00:00Z',result:'80',response_type:'kg'}];openLiveOverdueTasks()");
+assert.equal(w.testRun('overdueTasks().length'),1);
+await d.querySelector('[data-omit-task]').onclick();
+assert.equal(w.testRun('overdueTasks().length'),0);
+assert.equal(w.testRun("currentTaskRows()[0].status"),'pending');
+assert.equal(w.testRun('currentTaskRows().length'),2);
+assert.equal(w.testRun('overdueTasks(true).length'),1);
+w.testRun('state=JSON.parse(JSON.stringify(state))');assert.equal(w.testRun('overdueTasks().length'),0);
+d.querySelector('#showOmittedTasks').checked=true;d.querySelector('#showOmittedTasks').dispatchEvent(new w.Event('change'));assert.equal(d.querySelector('[data-omit-task]').textContent,'Geri al');
+await d.querySelector('[data-omit-task]').onclick();assert.equal(w.testRun('overdueTasks().length'),1);
+await w.testRun("setTaskOmitted('late1',true)");
+w.testRun("state.role='member'");assert.equal(w.testRun('overdueTasks().length'),1);assert.equal(await w.testRun("setTaskOmitted('late1',false)"),false);
+w.testRun("state.role='pt';state.demoChat.tasks[0].due_at='2020-02-01T12:00:00Z'");assert.equal(w.testRun('overdueTasks().length'),1);
+assert.equal(w.demoDbCalls,0);
+w.testRun("demoMode=false;authUser={id:'pt-one'};cloudTasks=clone(state.demoChat.tasks);state.customer.dbId=String(state.customer.id);window.oldSync=syncCloudData;syncCloudData=async()=>{throw Error('offline')}");
+assert.equal(await w.testRun("setTaskOmitted('late1',true)"),false);assert.equal(w.testRun('overdueTasks().length'),1);
+w.testRun("syncCloudData=async()=>{window.savedState=JSON.stringify(state)}");
+assert.equal(await w.testRun("setTaskOmitted('late1',true)"),true);assert.ok(JSON.parse(w.savedState).omittedOverdueTasks.late1);
+w.testRun("authUser={id:'pt-two'}");assert.equal(w.testRun('overdueTasks().length'),1);
+assert.deepEqual(errors,[]);dom.window.close();console.log('PASS: emoji search/pagination/insertion; omit/restore, role and owner isolation, preserved results, persistence and failure rollback');
+})().catch(e=>{console.error(e);process.exit(1)});

@@ -25,5 +25,13 @@ try{
   select(['Kol']);d.querySelector('#saveResultEdit').click();assert.equal(w.testRun('state.events[0].muscleGroups[0]'),'Kol');assert.equal(w.testRun('state.package.usedSessions'),3);
   w.testRun("closeModal();state.role='member';editSessionResult(window.sessionId)");assert.ok(!d.querySelector('#modalBack').classList.contains('show'));
  }
- assert.deepEqual(errors,[]);console.log('PASS: past completed/no-show muscle edits, numeric/UUID click routes, reopen/removal/no-op, package balance, audit history and PT-only access');
+ for(const page of ['dashboard','calendar'])for(const action of ['completed','noshow']){
+  w.resultPage=page;
+  w.testRun(`demoMode=false;authUser={id:'trainer-test'};save=()=>{};state=clone(window.fixture);state.role='pt';state.page=window.resultPage;state.customer.archived=false;state.selectedDate='2020-01-02';state.calCursor='2020-01-01T12:00:00';state.calendarCustomerFilter='all';state.events=[{id:'22222222-2222-4222-8222-222222222222',type:'session',customerId:state.customer.id,status:'planned',date:state.selectedDate,time:'10:00',endTime:'11:00',title:'Live UUID past session',createdBy:'pt'}];render()`);
+  if(action==='completed')d.querySelector('[data-complete-session]').click();
+  else {d.querySelector('[data-noshow]').click();assert.ok(d.querySelector('#saveNs'));d.querySelector('#saveNs').click();}
+  assert.equal(w.testRun('state.events[0].status'),action,page+' live UUID click');
+ }
+ w.testRun("state.events[0].status='planned';state.events[0].date='2099-01-01';completeSession(state.events[0].id)");assert.equal(w.testRun('state.events[0].status'),'planned');
+ assert.deepEqual(errors,[]);console.log('PASS: completed muscle edits and live UUID complete/no-show buttons on home/calendar; future session blocked');
 }finally{dom.window.close();}
