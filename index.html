@@ -78,6 +78,14 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
 .archivedRow{opacity:.78;background:#fafbfc}.archivedRow .personAvatar{filter:grayscale(.5)}
 .authBack{position:fixed;inset:0;z-index:500;background:linear-gradient(145deg,#edf8ff,#e7f8f0);display:grid;place-items:center;padding:18px}.authBack[hidden]{display:none}.authCard{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 70px rgba(18,32,51,.18);padding:26px}.authLogo{font-size:38px;font-weight:900;letter-spacing:-2px}.authLogo i{font-style:normal;color:var(--green)}.authError{min-height:20px;color:#b22a27;font-size:13px;margin-top:10px}.cloudBadge{display:inline-flex;align-items:center;gap:6px;background:#eaf2ff;color:#225fc2;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:800}.cloudBadge:before{content:'●';color:#3b82f6}.authActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
 .day.weekend:not(.blocked):not(.selected){background:#f1f4f8}.week div:nth-child(n+6){color:#526681;font-weight:700}.day.weekend .dayNum{text-decoration:underline;text-underline-offset:4px}
+/* Calendar tracks must shrink independently of event label length. */
+.content,.calendarWrap,.calendarWrap>*{min-width:0}
+.week,.days{grid-template-columns:repeat(7,minmax(0,1fr))}
+.day{min-width:0;max-width:100%;overflow:hidden}
+.dayBadge{min-width:0;max-width:100%}
+.calHead{gap:8px;flex-wrap:wrap}
+.calendarWrap>.card{overflow-wrap:anywhere}
+@media(min-width:1051px) and (max-width:1200px){.calendarWrap{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.customerActions{width:100%}.customerActions #manualCustomer{width:100%;min-height:48px}}
 
 /* Chat stickers and message-linked tasks */
