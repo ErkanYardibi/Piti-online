@@ -162,6 +162,7 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
   <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button></div>
  </form>
 </div>
+<script src="/assets/offline-guard.js"></script>
 <script src="/vendor/supabase.min.js"></script>
 <script>
 (() => {
@@ -218,7 +219,7 @@ function cleanDemoState(source){
 function emptyLiveState(){const s=cleanDemoState({customer:{id:'no-customer',name:'',photo:'',weight:'',status:'active'},ptProfile:{name:'',bio:'',specialties:'',locations:[],photo:'',confirmHours:24}});s.invite={ptCode:'',oneTimeCodes:[],pending:[],approved:[]};s.memberTrainer={name:'Henüz PT bağlantısı yok',code:'',status:'unlinked'};s.isolationVersion=1;return s}
 function load(){return emptyLiveState()}
 function persistState(){}
-function save(){syncTestAccount();persistState();queueCloudSync()}
+function save(){if(navigator.onLine===false)return Promise.resolve(false);syncTestAccount();persistState();queueCloudSync()}
 function queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast('Buluta kaydedilemedi: '+e.message)),650)}
 function uuid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16)})}
 function cloudCustomerRow(c,ptId,userId=null){c.dbId=c.dbId||(/^[0-9a-f-]{36}$/i.test(String(c.id))?c.id:uuid());return {id:c.dbId,pt_id:ptId||null,user_id:userId,full_name:c.name,phone:c.phone||null,email:c.email||null,blood_type:c.blood||null,gender:c.gender||null,weight:Number(c.weight)||null,height:Number(c.height)||null,archived:!!c.archived,updated_at:new Date().toISOString()}}
@@ -236,6 +237,7 @@ function syncCloudData(){
  cloudSyncChain=job;return job;
 }
 async function syncCloudDataNow(){
+ if(navigator.onLine===false)throw Error('Bağlantı yok. Değişiklik kaydedilemedi.');
  if(!authUser||demoMode||!db)return;
  if(adminMode||liveStateOwner!==authUser.id||state.cloudOwner!==authUser.id||state.demoFixtureVersion||state.demoCloudVersion||Object.keys(state.customerAccounts||{}).some(k=>/^(demo-|test-customer-)/.test(k)))throw Error('Hesap verisi doğrulanamadı. Sayfayı yenileyip tekrar giriş yap.');
  const ensureCurrent=liveContextGuard();
@@ -622,6 +624,7 @@ async function loadLiveTasks(){if(!authUser&&!demoMode)return;const owner=chatAc
 function updateLiveTaskWidgets(){if(!authUser&&!demoMode)return;const counter=view.querySelector('[data-home-action="tasks"] .kpiVal');if(counter)counter.textContent=taskLoadError?'—':overdueTasks().length;const panel=document.getElementById('liveMemberTasks');if(panel){panel.innerHTML=memberTasksHtml();panel.querySelectorAll('[data-open-task-chat]').forEach(b=>b.onclick=()=>nav('messages'))}}
 function memberTasksHtml(){const list=activeTaskRows().filter(t=>t.client_id===chatClientId(state.customer)&&(t.status!=='done'||(t.due_at&&iso(new Date(t.due_at))===iso(new Date()))));return `<h2 class="sectionTitle">Görevlerim</h2>${taskLoadError?`<p role="status">${taskLoadError}</p>`:list.length?list.map(t=>`<div class="hist"><div><b>${escapeHtml(t.title)}</b>${taskStatusHtml(t)}</div><button class="btn sm ghost" data-open-task-chat="${t.id}">Sohbette aç</button></div>`).join(''):'<div class="empty">Bekleyen görev yok.</div>'}`}
 async function setTaskOmitted(id,omit){
+ if(navigator.onLine===false){toast('Bağlantı yok. Görev tercihi kaydedilemedi.');return false;}
  if(state.role!=='pt')return false;
  const t=overdueTasks(true).find(t=>String(t.id)===String(id));if(!t)return false;
  const snapshot=state,owner=chatActorId(),key=String(t.id),previous=state.omittedOverdueTasks?.[key];
@@ -665,7 +668,7 @@ async function prepareTaskPhoto(file){
   throw Error('Fotoğraf yeterince küçültülemedi. Başka bir fotoğraf seç.');
  }finally{URL.revokeObjectURL(url)}
 }
-function openCompleteTask(id){const t=chatTaskRows.find(t=>t.id===id);if(!t||t.status==='done'||state.role!=='member')return;openModal(`<h3>${escapeHtml(t.title)}</h3>${t.response_type==='photo'?'<div class="field"><label>Öğün fotoğrafı</label><div class="rightActions"><button class="btn primary" type="button" id="taskTakePhoto">Fotoğraf Çek</button><button class="btn ghost" type="button" id="taskChoosePhoto">Galeriden Seç</button></div><input hidden type="file" id="taskCameraPhoto" accept="image/*" capture="environment"><input hidden type="file" id="taskResultPhoto" accept="image/*"><div class="small muted">Seçtiğin fotoğraf otomatik küçültülüp gönderilir. En fazla 1.000 piksel ve 200 KB olarak yüklenir.</div></div>':['kg','litre'].includes(t.response_type)?`<div class="field"><label for="taskResultNumber">${t.response_type==='kg'?'Kilon (kg)':'İçtiğin su (litre)'}</label><input class="input" type="number" id="taskResultNumber" min="0.01" max="${t.response_type==='kg'?700:100}" step="0.01" inputmode="decimal"></div>`:'<p>Bu görevi tamamladın mı?</p>'}<p id="taskResultError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="taskResultSave">${t.response_type==='done'?'Tamamladım':'Sonucu gönder'}</button></div>`);let selectedPhoto=null;const photoActor=chatActorId();modal.querySelector('#taskResultSave').onclick=async()=>{const b=modal.querySelector('#taskResultSave'),err=modal.querySelector('#taskResultError');if(b.disabled)return;b.disabled=true;err.textContent='';try{let result=null,photo=null;if(['kg','litre'].includes(t.response_type)){const v=Number(modal.querySelector('#taskResultNumber').value);if(!Number.isFinite(v)||v<=0||v>(t.response_type==='kg'?700:100))throw Error('Geçerli bir sayı gir.');result=String(Math.round(v*100)/100)}if(t.response_type==='photo')photo=await prepareTaskPhoto(selectedPhoto||modal.querySelector('#taskResultPhoto').files[0]);if(photoActor!==chatActorId()||!b.isConnected)return;const {data,error}=await chatData().complete(t,{status:'done',result,result_photo:photo});if(error)throw error;if(!data?.length)throw Error('Görev tamamlanamadı. Sayfayı yenile.');closeModal();await Promise.all([refreshLiveChat(),loadLiveTasks()]);toast(t.response_type==='kg'?'Tartıl sonucu kaydedildi; Gelişim ekranında da görünecek.':'Görev tamamlandı. Sonuç PT’inle paylaşıldı.')}catch(e){err.textContent=e.message;b.disabled=false}};if(t.response_type==='photo'){
+function openCompleteTask(id){const t=chatTaskRows.find(t=>t.id===id);if(!t||t.status==='done'||state.role!=='member')return;openModal(`<h3>${escapeHtml(t.title)}</h3>${t.response_type==='photo'?'<div class="field"><label>Öğün fotoğrafı</label><div class="rightActions"><button class="btn primary" type="button" id="taskTakePhoto">Fotoğraf Çek</button><button class="btn ghost" type="button" id="taskChoosePhoto">Galeriden Seç</button></div><input hidden type="file" id="taskCameraPhoto" accept="image/*" capture="environment"><input hidden type="file" id="taskResultPhoto" accept="image/*"><div class="small muted">Seçtiğin fotoğraf otomatik küçültülüp gönderilir. En fazla 1.000 piksel ve 200 KB olarak yüklenir.</div></div>':['kg','litre'].includes(t.response_type)?`<div class="field"><label for="taskResultNumber">${t.response_type==='kg'?'Kilon (kg)':'İçtiğin su (litre)'}</label><input class="input" type="number" id="taskResultNumber" min="0.01" max="${t.response_type==='kg'?700:100}" step="0.01" inputmode="decimal"></div>`:'<p>Bu görevi tamamladın mı?</p>'}<p id="taskResultError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="taskResultSave">${t.response_type==='done'?'Tamamladım':'Sonucu gönder'}</button></div>`);let selectedPhoto=null;const photoActor=chatActorId();modal.querySelector('#taskResultSave').onclick=async()=>{const b=modal.querySelector('#taskResultSave'),err=modal.querySelector('#taskResultError');if(b.disabled)return;b.disabled=true;err.textContent='';try{let result=null,photo=null;if(['kg','litre'].includes(t.response_type)){const v=Number(modal.querySelector('#taskResultNumber').value);if(!Number.isFinite(v)||v<=0||v>(t.response_type==='kg'?700:100))throw Error('Geçerli bir sayı gir.');result=String(Math.round(v*100)/100)}if(t.response_type==='photo')photo=await prepareTaskPhoto(selectedPhoto||modal.querySelector('#taskResultPhoto').files[0]);if(navigator.onLine===false)throw Error('Bağlantı yok. Görev sonucu gönderilmedi.');if(photoActor!==chatActorId()||!b.isConnected)return;const {data,error}=await chatData().complete(t,{status:'done',result,result_photo:photo});if(error)throw error;if(!data?.length)throw Error('Görev tamamlanamadı. Sayfayı yenile.');closeModal();await Promise.all([refreshLiveChat(),loadLiveTasks()]);toast(t.response_type==='kg'?'Tartıl sonucu kaydedildi; Gelişim ekranında da görünecek.':'Görev tamamlandı. Sonuç PT’inle paylaşıldı.')}catch(e){err.textContent=e.message;b.disabled=false}};if(t.response_type==='photo'){
  const saveButton=modal.querySelector('#taskResultSave');
  modal.querySelector('#taskTakePhoto').onclick=()=>modal.querySelector('#taskCameraPhoto').click();
  modal.querySelector('#taskChoosePhoto').onclick=()=>modal.querySelector('#taskResultPhoto').click();
@@ -677,6 +680,7 @@ function openCompleteTask(id){const t=chatTaskRows.find(t=>t.id===id);if(!t||t.s
  };
 }}
 async function sendLiveMessage(){
+ if(navigator.onLine===false){toast('Bağlantı yok. Mesaj gönderilemedi.');return;}
  if(chatSending)return;const input=document.getElementById('msgInput'),c=selectedChatCustomer(),sticker=state.role==='pt'?chatSticker:null,text=input?.value.trim()||chatStickers.find(s=>s.id===sticker)?.label;if(!text||!c)return;
  if(!chatClientId(c)){toast('Müşteri henüz buluta kaydedilmedi. Önce müşteri kaydını tamamla.');return}
  const task=state.role==='pt'&&document.getElementById('chatAsTask')?.checked,due=task?new Date(document.getElementById('chatDue').value):null;
@@ -1334,6 +1338,7 @@ function openPackage(){
  };
 }
 function recordSessionResult(e,status,count,reason='',note='',groups){
+ if(navigator.onLine===false){toast('Bağlantı yok. Seans sonucu kaydedilemedi.');return false;}
  if(state.role!=='pt'||!e||e.type!=='session'||!['planned','completed','noshow'].includes(e.status)||!['completed','noshow'].includes(status))return false;
  if(!state.events.includes(e)){toast('Seans kaydı değişti. Yeniden açıp kontrol et.');return false;}
  if(leaveConflicts(e).length){toast('Önce izin çakışmasını iptal veya erteleme ile çöz.');return false;}
@@ -1362,7 +1367,7 @@ function renderResultApprovals(){
  renderBookingApprovals();
  if(state.role==='pt'&&state.page==='calendar'&&state.calendarCustomerFilter==='pt_self')return;
  let changed=false;
- state.events.forEach(e=>{if(e.confirmation?.status==='pending'&&Date.now()>=Date.parse(e.confirmation.deadline)){e.confirmation.status='auto';e.confirmation.acceptedAt=e.confirmation.deadline;changed=true;}});
+ state.events.forEach(e=>{if(navigator.onLine!==false&&e.confirmation?.status==='pending'&&Date.now()>=Date.parse(e.confirmation.deadline)){e.confirmation.status='auto';e.confirmation.acceptedAt=e.confirmation.deadline;changed=true;}});
  if(changed)save();
  if(state.role==='pt'&&state.page==='profile'){
  const card=document.createElement('div');card.className='card';card.style.marginTop='16px';card.innerHTML=`<h2 class="sectionTitle">Seans sonucu onay süresi</h2><div class="field"><label for="confirmationHours">Müşterinin yanıt süresi (saat)</label><input class="input" id="confirmationHours" type="number" min="1" max="720" step="1" value="${Number(state.ptProfile.confirmHours)||24}"></div><p class="small muted">Süre dolunca yanıtlanmayan sonuçlar otomatik kabul edilir. Yeni süre bundan sonraki işlemler için geçerlidir.</p><button class="btn primary" id="saveConfirmationHours">Süreyi Kaydet</button>`;view.appendChild(card);

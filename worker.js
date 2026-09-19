@@ -28,8 +28,8 @@ export default {
     // there is no browser-only 650 ms debounce window anymore. persistState()
     // intentionally remains empty, so business data is never persisted locally.
     patch(
-      'function save(){syncTestAccount();persistState();queueCloudSync()}\nfunction queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast(\'Buluta kaydedilemedi: \'+e.message)),650)}',
-      'function save(){syncTestAccount();persistState();return queueCloudSync()}\nfunction queueCloudSync(){if(!authUser||demoMode||!db)return Promise.resolve(true);clearTimeout(cloudSyncTimer);return syncCloudData().then(()=>true).catch(e=>{toast(\'Buluta kaydedilemedi: \'+e.message);return false})}'
+      'function save(){if(navigator.onLine===false)return Promise.resolve(false);syncTestAccount();persistState();queueCloudSync()}\nfunction queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast(\'Buluta kaydedilemedi: \'+e.message)),650)}',
+      'function save(){if(navigator.onLine===false)return Promise.resolve(false);syncTestAccount();persistState();return queueCloudSync()}\nfunction queueCloudSync(){if(!authUser||demoMode||!db)return Promise.resolve(true);clearTimeout(cloudSyncTimer);return syncCloudData().then(()=>true).catch(e=>{toast(\'Buluta kaydedilemedi: \'+e.message);return false})}'
     );
 
     // Registration hand-off is transient session data, not business data.

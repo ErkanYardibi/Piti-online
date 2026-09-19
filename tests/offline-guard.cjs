@@ -1,0 +1,25 @@
+const {JSDOM}=require(process.env.PITI_JSDOM_PATH||'jsdom');
+const fs=require('fs'),assert=require('assert/strict');
+(async()=>{
+ const dom=new JSDOM('<header class="topbar"></header><button data-nav="calendar">Takvim</button><form><input id="draft" value="taslak"><input id="alreadyDisabled" disabled><button id="save">Kaydet</button></form><button id="delete">Sil</button><button data-close>Kapat</button><select id="calendarCustomerFilter"><option>Hepsi</option></select>',{url:'https://mypiti.online',runScripts:'outside-only'});
+ const w=dom.window,d=w.document;let online=true,writes=0,reads=0,nav=0,closed=0,submitted=0;
+ Object.defineProperty(w.navigator,'onLine',{get:()=>online});w.fetch=async()=>{writes++;return {ok:true}};
+ w.eval(fs.readFileSync('assets/offline-guard.js','utf8'));
+ d.querySelector('#save').onclick=e=>{e.preventDefault();writes++};d.querySelector('#delete').onclick=()=>writes++;
+ d.querySelector('[data-nav]').onclick=()=>nav++;d.querySelector('[data-close]').onclick=()=>closed++;
+ d.querySelector('form').onsubmit=e=>{e.preventDefault();submitted++};
+ await new Promise(r=>setTimeout(r,0));
+ online=false;w.dispatchEvent(new w.Event('offline'));
+ d.querySelector('#save').click();d.querySelector('#delete').click();d.querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+ assert.equal(writes,0);assert.equal(submitted,0);assert.ok(d.querySelector('#draft').disabled);assert.ok(!d.querySelector('#calendarCustomerFilter').disabled);
+ d.querySelector('[data-nav]').click();d.querySelector('[data-close]').click();assert.equal(nav,1);assert.equal(closed,1);
+ await assert.rejects(w.fetch('/write',{method:'POST'}),/Bağlantı yok/);assert.equal(writes,0);
+ d.body.insertAdjacentHTML('beforeend','<input id="lateField"><button id="lateSave">Ekle</button>');d.querySelector('#lateSave').onclick=()=>writes++;
+ await new Promise(r=>setTimeout(r,0));assert.ok(d.querySelector('#lateField').disabled);d.querySelector('#lateSave').click();assert.equal(writes,0);
+ online=true;w.dispatchEvent(new w.Event('online'));assert.ok(!d.querySelector('#draft').disabled);assert.equal(d.querySelector('#draft').value,'taslak');assert.ok(d.querySelector('#alreadyDisabled').disabled);assert.ok(d.querySelector('#offlineNotice').hidden);d.querySelector('#save').click();assert.equal(writes,1);
+ dom.window.close();
+ const html=fs.readFileSync('index.html','utf8'),worker=fs.readFileSync('worker.js','utf8');
+ const from=worker.match(/'function save\(\).*?\n/)[0].trim().replace(/,$/,'');
+ assert.ok(html.includes(Function('return '+from)()),'worker cloud-first replacement must still match source');
+ console.log('PASS: offline save/delete/submit and network writes blocked, dynamic forms locked, browsing allowed, reconnect preserves draft and existing disabled controls; worker patch matches');
+})().catch(e=>{console.error(e);process.exit(1)});
