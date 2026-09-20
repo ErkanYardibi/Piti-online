@@ -1,0 +1,25 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom'),fs=require('fs'),assert=require('assert/strict');
+const html=fs.readFileSync('index.html','utf8').replace('const db=','let db=').replace('<script src="/vendor/supabase.min.js"></script>','').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();');
+const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
+const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{}}});
+(async()=>{try{
+ const w=dom.window,d=w.document;w.fixture=JSON.parse(fs.readFileSync('assets/demo-state.json'));
+ w.testRun("demoMode=true;state=clone(window.fixture);state.role='member';state.page='calendar';state.selectedDate='2099-10-01';state.calCursor='2099-10-01T12:00:00';state.events=[{id:'slot-x',type:'availability',date:state.selectedDate,time:'10:00',endTime:'11:00',title:'Müsait',status:'open',visibility:'all',createdBy:'pt'}];calendar()");
+ await w.testRun("requestSlot('slot-x')");assert.equal(w.testRun("state.events.filter(e=>e.status==='requested').length"),1);
+ assert.equal(w.testRun("state.events.find(e=>e.id==='slot-x').type"),'availability');
+ await w.testRun("requestSlot('slot-x')");assert.equal(w.testRun("state.events.filter(e=>e.status==='requested').length"),1);
+ w.testRun("state.role='pt';state.page='dashboard';render()");assert.ok(d.querySelector('#appointmentAlerts'));d.querySelector('#appointmentAlerts [data-review-request]').click();
+ assert.ok(d.querySelector('#approveAppointment'));assert.ok(d.querySelector('#rejectAppointment'));
+ await w.testRun("decideAppointment(state.events.find(e=>e.status==='requested').id,true)");
+ assert.equal(w.testRun("state.events.filter(e=>e.status==='planned').length"),1);assert.equal(d.querySelector('#appointmentAlerts'),null);
+ assert.equal(w.testRun("sessionStatusToDb('requested')"),'requested');assert.equal(w.testRun("sessionStatusToDb('rejected')"),'rejected');
+ w.testRun("state.events.find(e=>e.type==='session').status='requested';state.customer.archived=true;state.homeShowArchived=false;render()");
+ assert.equal(d.querySelector('#appointmentAlerts'),null);
+ w.testRun("state.customer.archived=false;state.events=state.events.filter(e=>e.type!=='session');demoMode=false;authUser={id:'member-user'};state.role='member';state.page='calendar';window.calls=[];db={rpc:async(name,args)=>{window.calls.push({name,args});return {error:Error('network')}}}");
+ await w.testRun("requestSlot('slot-x')");assert.equal(w.calls[0].name,'request_trainer_slot');assert.equal(w.testRun("state.events.filter(e=>e.type==='session').length"),0,'failed RPC cannot create phantom session');
+ w.testRun("window.row={id:'server-uuid',client_id:state.customer.id,pt_id:'pt-a',starts_at:'2099-10-01T07:00:00Z',ends_at:'2099-10-01T08:00:00Z',status:'requested',request_origin:true,workout_title:'PT Randevu Talebi'};db.rpc=async()=>({data:window.row})");
+ await w.testRun("requestSlot('slot-x')");assert.equal(w.testRun("state.events.find(e=>e.id==='server-uuid').status"),'requested');
+ w.testRun("state.role='pt';authUser={id:'pt-a'};state.page='dashboard';render();db.rpc=async(name,args)=>{window.calls.push({name,args});return {data:{...window.row,status:args.p_approve?'planned':'rejected'}}}");
+ await w.testRun("decideAppointment('server-uuid',false)");assert.equal(w.testRun("state.events.find(e=>e.id==='server-uuid').status"),'rejected');assert.equal(w.calls.at(-1).name,'decide_session_request');
+ assert.deepEqual(errors,[]);console.log('PASS: pending request preserved, source slot intact, duplicate prevention, PT alert/approval, archive hiding, RPC failure/success/rejection');
+}finally{dom.window.close()}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -236,7 +236,7 @@ function save(){if(navigator.onLine===false)return Promise.resolve(false);syncTe
 function queueCloudSync(){if(!authUser||demoMode||!db)return;clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudData().catch(e=>toast('Buluta kaydedilemedi: '+e.message)),650)}
 function uuid(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&3|8);return v.toString(16)})}
 function cloudCustomerRow(c,ptId,userId=null){c.dbId=c.dbId||(/^[0-9a-f-]{36}$/i.test(String(c.id))?c.id:uuid());return {id:c.dbId,pt_id:ptId||null,user_id:userId,full_name:c.name,phone:c.phone||null,email:c.email||null,blood_type:c.blood||null,gender:c.gender||null,weight:Number(c.weight)||null,height:Number(c.height)||null,archived:!!c.archived,updated_at:new Date().toISOString()}}
-function sessionStatusToDb(s){return s==='noshow'?'no_show':(['planned','completed','no_show','cancelled'].includes(s)?s:'planned')}
+function sessionStatusToDb(s){return s==='noshow'?'no_show':(['planned','requested','rejected','completed','no_show','cancelled'].includes(s)?s:'planned')}
 function sessionStatusFromDb(s){return s==='no_show'?'noshow':s}
 function eventTimestamp(date,time){return new Date(`${date}T${/^\d\d:\d\d$/.test(time||'')?time:'00:00'}:00`).toISOString()}
 let cloudSyncChain=Promise.resolve();
@@ -266,7 +266,7 @@ async function syncCloudDataNow(){
   ensureCurrent();if(result.error)throw result.error;
  }
  const byLocal=new Map(customers.map(c=>[String(c.id),c]));
- const sessions=(state.events||[]).filter(e=>e.type==='session'&&byLocal.has(String(e.customerId))).map(e=>{const c=byLocal.get(String(e.customerId));e.dbId=e.dbId||uuid();return {id:e.dbId,client_id:c.dbId,pt_id:state.role==='pt'?authUser.id:(e.ptId||c.ptId||null),starts_at:eventTimestamp(e.date,e.time),ends_at:e.endTime?eventTimestamp(e.date,e.endTime):null,status:sessionStatusToDb(e.status),workout_title:e.title||null,muscle_groups:Array.isArray(e.muscleGroups)?e.muscleGroups:[],salon:e.location||null,notes:e.note||e.sessionNote||null,counts_against_package:e.counts!==false,updated_at:new Date().toISOString()}});
+ const sessions=(state.events||[]).filter(e=>e.type==='session'&&byLocal.has(String(e.customerId))&&!(e.status==='requested'||e.status==='rejected')&&!(state.role==='member'&&e.requestOrigin)).map(e=>{const c=byLocal.get(String(e.customerId));e.dbId=e.dbId||uuid();return {id:e.dbId,client_id:c.dbId,pt_id:state.role==='pt'?authUser.id:(e.ptId||c.ptId||null),starts_at:eventTimestamp(e.date,e.time),ends_at:e.endTime?eventTimestamp(e.date,e.endTime):null,request_origin:!!e.requestOrigin,status:sessionStatusToDb(e.status),workout_title:e.title||null,muscle_groups:Array.isArray(e.muscleGroups)?e.muscleGroups:[],salon:e.location||null,notes:e.note||e.sessionNote||null,counts_against_package:e.counts!==false,updated_at:new Date().toISOString()}});
  if(sessions.length){const {error}=await db.from('sessions').upsert(sessions,{onConflict:'id'});ensureCurrent();if(error)throw error}
  await syncClientHistories(customers);ensureCurrent();
  const {error:stateError}=await db.from('account_state').upsert({user_id:authUser.id,data:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
@@ -296,7 +296,7 @@ async function loadCloudData(){
  else {let {data:client,error}=await db.from('clients').select('*').eq('user_id',authUser.id).maybeSingle();ensureCurrent();if(error)throw error;if(!client){const created=await db.from('clients').insert({user_id:authUser.id,full_name:profile.full_name,email:authUser.email?.endsWith('@accounts.mypiti.invalid')?null:authUser.email}).select().single();ensureCurrent();if(created.error)throw created.error;client=created.data}state.customer={...mapCloudCustomer(client),photo:profile.avatar_url||state.customer?.photo||''};state.manualCustomers=[];state.demoCustomers=[];state.customerAccounts={};state.events=[];Object.assign(state,emptyClientHistory())}
  const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');ensureCurrent();if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
- const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
+ const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),requestOrigin:!!s.request_origin,title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
  state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();ensureCurrent();await loadMemberTrainer();ensureCurrent();await loadTrainerAvailability();ensureCurrent();await loadClientInvitations();ensureCurrent();await loadLiveTasks();ensureCurrent();if(typeof loadTransferData==='function'){await loadTransferData();ensureCurrent();}liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy){await syncCloudDataNow();ensureCurrent();}localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
 }
 let demoLoadSequence=0;
@@ -918,7 +918,7 @@ const navPT=[['dashboard','home','Ana Sayfa'],['customers','users','Müşteriler
 const navM=[['today','home','Bugün'],['calendar','calendar','Takvim'],['finance','wallet','Paketim'],['messages','message','Mesajlar'],['progress','chart','Gelişim'],['trainer','trainer','PT’im'],['profile','user','Profilim']];
 function navIcon(name){const p={home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',spark:'<path d="m12 3 1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6z"/>',calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',wallet:'<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H19a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 17.5z"/><path d="M3 8h18M16 14h.01"/>',message:'<path d="M20 11.5a8 8 0 0 1-9 7.9L5 21l1.6-3.3A8 8 0 1 1 20 11.5z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/>',user:'<circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',chart:'<path d="M4 19V5M4 19h17"/><path d="m7 15 3-4 3 2 5-7"/>',trainer:'<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0M3 12h4M17 12h4"/>',};return `<svg viewBox="0 0 24 24" aria-hidden="true">${p[name]||p.spark}</svg>`}
 function setRole(role){if(authUser&&!demoMode)return toast('Hesap türün kayıtlı rolüne bağlıdır.');if(role==='member'){state.role='member';state.page='today';state.financeCustomerId=state.customer.id;closeModal();save();render();return;}state.role='pt';state.page='dashboard';state.testPrimaryId=state.customer.id;closeModal();save();render()}
-function nav(page){if(demoMode&&state.role==='pt'&&state.testPrimaryId&&String(state.customer.id)!==String(state.testPrimaryId)&&page!=='messages')return switchTestUser(state.testPrimaryId,'pt',page);state.page=page;save();render();if(page==='calendar'&&authUser&&!demoMode&&state.role==='member'&&navigator.onLine!==false)refreshTrainerCalendar()}
+function nav(page){if(demoMode&&state.role==='pt'&&state.testPrimaryId&&String(state.customer.id)!==String(state.testPrimaryId)&&page!=='messages')return switchTestUser(state.testPrimaryId,'pt',page);state.page=page;save();render();refreshSessionRequests();if(page==='calendar'&&authUser&&!demoMode&&state.role==='member'&&navigator.onLine!==false)refreshTrainerCalendar()}
 function renderNav(){const items=state.role==='pt'?navPT:navM; sidebar.innerHTML=items.map(([p,i,t])=>`<button class="navBtn ${state.page===p?'active':''}" data-nav="${p}"><span class="navIcon">${navIcon(i)}</span><span class="navText">${t}${p==='messages'&&((state.unread||{})[state.role]||0)?' <span class=\"badge\">'+state.unread[state.role]+'</span>':''}</span></button>`).join('');sidebar.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));}
 function render(){if(adminMode)return;if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
  const map={dashboard:dashboard,customers:customers,customerProfile:customerProfile,invites:invites,calendar:calendar,finance:finance,messages:messages,today:memberToday,progress:progress,trainer:trainer,profile:state.role==='pt'?ptProfile:memberProfile}; (map[state.page]||dashboard)();renderResultApprovals();renderTestLauncher();renderLeavePanel();renderClientInviteControls();renderUsernameSettings();renderSelfPasswordSettings();if(typeof renderTransferControls==='function')renderTransferControls();if(authUser||demoMode){const h=Array.from(view.querySelectorAll('h2')).find(h=>h.textContent==='Bugünkü Görevler');if(h)h.parentElement.id='liveMemberTasks';updateLiveTaskWidgets();} }
@@ -976,6 +976,32 @@ function nextEventHtml(){
 }
 function delayAlertsHtml(){const events=homeEvents().filter(e=>hasDelay(e)&&e.date===iso(new Date())).sort((a,b)=>eventStart(a)-eventStart(b));return events.length?`<section class="latePanel" aria-label="Gecikme bildirimleri"><h2>◷ Gecikecek Müşteriler (${events.length})</h2>${events.map(e=>`<div class="lateRow"><div><b>${escapeHtml(e.delay.customerName||eventCustomer(e))} · ${Number(e.delay.minutes)} dk gecikecek</b><div class="lateDetail">${escapeHtml(e.time)} · ${escapeHtml(e.title)}<br>Tahmini varış: <b>${arrivalTime(e)}</b></div></div><button class="btn ghost" data-home-date="${e.date}">Seansı Gör</button></div>`).join('')}</section>`:'';}
 function bindHomeEvents(){bindResultActions();view.querySelectorAll('.heroTrainer').forEach(b=>b.onclick=()=>nav('trainer'));view.querySelectorAll('[data-home-date]').forEach(b=>b.onclick=()=>{if(b.dataset.homeCustomer)return nav('customers');state.selectedDate=b.dataset.homeDate;state.calCursor=new Date(b.dataset.homeDate.slice(0,7)+'-01T12:00:00').toISOString();nav('calendar');});}
+function appointmentAlertsHtml(){
+ const requests=pendingAppointments();if(state.role!=='pt'||!requests.length)return '';
+ return `<section id="appointmentAlerts" class="card" style="border-left:5px solid #d68a00;background:#fff8e6;margin-bottom:16px" aria-live="polite"><h2 class="sectionTitle">Randevu Talepleri (${requests.length})</h2><p class="small">Müşterilerin seans için onayını bekliyor.</p>${requests.map(e=>`<div class="hist"><div><b>${escapeHtml(eventCustomer(e))}</b><div class="small">${escapeHtml(formatShort(e.date))} · ${escapeHtml(eventTime(e))}</div><span class="status amber">Onay bekliyor</span></div><button class="btn sm primary" data-review-request="${escapeHtml(String(e.id))}">Talebi İncele</button></div>`).join('')}</section>`;
+}
+function mergeSessionRequest(row){
+ if(!row)return;const start=new Date(row.starts_at),end=row.ends_at?new Date(row.ends_at):null;
+ const c=financeCustomers().find(c=>String(c.dbId||c.id)===String(row.client_id))||state.customer;
+ const old=state.events.find(e=>String(e.dbId||e.id)===String(row.id));
+ const e={...old,id:row.id,dbId:row.id,customerId:row.client_id,customerName:c.name||'',ptId:row.pt_id,date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(row.status),requestOrigin:true,title:row.workout_title||'PT Randevu Talebi',muscleGroups:row.muscle_groups||[],location:row.salon||'',note:row.notes||'',counts:row.counts_against_package,cloudManaged:true,createdBy:row.status==='requested'?'member:'+row.client_id:'pt'};
+ if(old)Object.assign(old,e);else state.events.push(e);
+}
+let requestRefreshBusy=false;
+async function refreshSessionRequests(){
+ if(requestRefreshBusy||!authUser||demoMode||adminMode||navigator.onLine===false||document.hidden||!['dashboard','today','calendar'].includes(state.page)||modalBack.classList.contains('show'))return;
+ requestRefreshBusy=true;const ensureCurrent=liveContextGuard(),before=JSON.stringify(state.events.filter(e=>e.requestOrigin));
+ try{
+  await cloudSyncChain;ensureCurrent();
+  const {data,error}=await db.from('sessions').select('*').eq('request_origin',true);ensureCurrent();if(error)throw error;
+  const ids=new Set((data||[]).map(r=>String(r.id)));
+  state.events=state.events.filter(e=>!e.requestOrigin||!e.cloudManaged||ids.has(String(e.dbId||e.id)));
+  (data||[]).forEach(mergeSessionRequest);
+  if(before!==JSON.stringify(state.events.filter(e=>e.requestOrigin))&&!modalBack.classList.contains('show'))render();
+ }catch{}finally{requestRefreshBusy=false;}
+}
+setInterval(refreshSessionRequests,10000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSessionRequests();});
 function pendingAppointments(){return homeEvents().filter(e=>e.status==='requested').sort((a,b)=>eventStart(a)-eventStart(b));}
 function pendingPayments(){return visibleCustomers().filter(c=>(String(c.id)===String(state.customer.id)?state.payment:state.customerAccounts?.[c.id]?.payment)?.status==='pending');}
 function taskOmitted(t){const mark=state.omittedOverdueTasks?.[String(t.id)];return state.role==='pt'&&mark?.owner===chatActorId()&&mark.dueAt===t.due_at}
@@ -1002,7 +1028,7 @@ function openHomeAction(action){
 }
 function dashboard(){view.innerHTML=`
  <div class="toolbar"><div><h1>Merhaba${state.ptProfile?.name?.trim()?' '+escapeHtml(state.ptProfile.name.trim().split(/\s+/)[0]):''} 👋</h1><div class="muted">Bugün neler var?</div></div><div class="rightActions"><button class="btn primary" id="homeManualCustomer">+ Müşteri Ekle</button><button class="btn primary" id="addAvail">+ Müsaitlik Ekle</button></div></div>
- ${archiveViewToggle()}${resultAlertsHtml()}${delayAlertsHtml()}${nextEventHtml()}
+ ${archiveViewToggle()}${appointmentAlertsHtml()}${resultAlertsHtml()}${delayAlertsHtml()}${nextEventHtml()}
  <div class="grid4">${homeKpi('PT Seansı',homeEvents().filter(e=>e.type==='session'&&e.date===iso(new Date())&&e.status!=='requested').length,'Bugün','sessions')}${homeKpi('Randevu Talebi',pendingAppointments().length,'Bekliyor','requests')}${homeKpi('Geciken Görev',overdueTasks().length,'Dikkat','tasks')}${homeKpi('Ödeme / Paket',pendingPayments().length,'Onay bekliyor','payments')}</div>
  <div class="grid2" style="margin-top:18px">
   <div class="card"><h2 class="sectionTitle">Bugünkü Seanslar</h2><div class="tableWrap"><table class="table"><thead><tr><th>Saat</th><th>Müşteri</th><th>Plan</th><th>Durum</th><th></th></tr></thead><tbody>
@@ -1268,13 +1294,19 @@ function openAppointmentReview(id){
  modal.querySelector('#approveAppointment').onclick=()=>decideAppointment(id,true);
  modal.querySelector('#rejectAppointment').onclick=()=>decideAppointment(id,false);
 }
-function decideAppointment(id,approve){
+async function decideAppointment(id,approve){
  const e=state.events.find(x=>String(x.id)===String(id));
  if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='requested')return toast('Bu talep artık onay beklemiyor.');
  if(approve){
   if(!Number.isFinite(eventStart(e))||eventStart(e)<=Date.now())return toast('Geçmiş bir randevu talebi onaylanamaz.');
   if(leaveConflicts(e).length)return toast('Bu talep izinle çakışıyor. Önce izin veya randevu zamanını düzenle.');
   if(state.events.some(x=>x.id!==e.id&&['session','demo'].includes(x.type)&&x.status==='planned'&&eventStart(x)<eventFinish(e)&&eventFinish(x)>eventStart(e)))return toast('Bu saatte onaylı başka bir seans var.');
+ }
+ if(authUser&&!demoMode){
+  if(navigator.onLine===false)return toast('Bağlantı yok. Talep değerlendirilemedi.');
+  const ensureCurrent=liveContextGuard();modal.querySelectorAll('#approveAppointment,#rejectAppointment').forEach(b=>b.disabled=true);
+  try{const {data,error}=await db.rpc('decide_session_request',{p_session_id:e.dbId||e.id,p_approve:approve});ensureCurrent();if(error)throw error;mergeSessionRequest(data);closeModal();render();toast(approve?'Randevu onaylandı.':'Randevu talebi reddedildi.');}
+  catch(err){toast(err.message);modal.querySelectorAll('#approveAppointment,#rejectAppointment').forEach(b=>b.disabled=false);}return;
  }
  e.status=approve?'planned':'rejected';e.reviewedAt=new Date().toISOString();e.reviewedBy='pt';
  if(approve){e.createdBy='pt';if(e.title==='PT Randevu Talebi')e.title='PT Seansı';}
@@ -1348,7 +1380,7 @@ function eventCard(e){
    : `<div class="eventTitle">${escapeHtml(eventTime(e))} · ${escapeHtml(e.title)}</div><div class="eventMeta eventMetaRow"><span>${e.type==='demo'?'Ücretsiz Demo':e.type==='memberoff'?escapeHtml(eventCustomer(e))+' · Müşteri izinli':e.type==='availability'?'Müsaitlik':'PT müsait değil'}</span>${statusBadge}</div>`;
  return `<div class="eventItem ${hasDelay(e)||needsResult(e)?'eventLate':''}"><div class="eventDetails">${eventContent}</div>${hasDelay(e)?`<div style="margin-top:10px">${delayBadge(e)}</div>`:''}${leaveNoteHtml(e)}${actions}</div>`;
 }
-function statusText(e){if(e.status==='planned'&&e.bookingApproval)return e.bookingApproval.status==='pending'?'Öğrenci onayı bekliyor':e.bookingApproval.status==='pt_confirmed'?'Planlı · PT öğrenci adına onayladı':'Planlı · Öğrenci onayladı';if(e.status==='cancelled')return (e.lateCancellation?'Geç iptal':'İptal edildi')+(e.counts?' · Seans sayıldı':' · Seans düşülmedi');if(leaveConflicts(e).length)return 'İzinle çakışıyor · Karar bekliyor';if(needsResult(e))return 'Sonuç bekliyor';return e.status==='completed'?'Tamamlandı':e.status==='planned'?'Planlı':e.status==='noshow'?(e.counts?'No Show · Sayıldı':'No Show · Sayılmadı'):e.status==='requested'?'Talep gönderildi':e.type==='availability'?'Uygun':'Kapalı'}
+function statusText(e){if(e.status==='planned'&&e.bookingApproval)return e.bookingApproval.status==='pending'?'Öğrenci onayı bekliyor':e.bookingApproval.status==='pt_confirmed'?'Planlı · PT öğrenci adına onayladı':'Planlı · Öğrenci onayladı';if(e.status==='cancelled')return (e.lateCancellation?'Geç iptal':'İptal edildi')+(e.counts?' · Seans sayıldı':' · Seans düşülmedi');if(leaveConflicts(e).length)return 'İzinle çakışıyor · Karar bekliyor';if(needsResult(e))return 'Sonuç bekliyor';return e.status==='completed'?'Tamamlandı':e.status==='planned'?'Planlı':e.status==='noshow'?(e.counts?'No Show · Sayıldı':'No Show · Sayılmadı'):e.status==='requested'?'PT onayı bekleniyor':e.status==='rejected'?'Talep reddedildi':e.type==='availability'?'Uygun':'Kapalı'}
 function memberRequestBox(date){const open=state.events.filter(e=>e.date===date&&e.type==='availability'&&e.status==='open'&&testEventVisible(e)); return open.length?`<div style="margin-top:15px"><div class="subTitle">PT'nin müsait saatleri</div>${open.map(e=>`<div class="eventItem"><b>${eventTime(e)}</b><button class="btn sm primary" style="float:right" data-request-slot="${e.id}">Talep Et</button></div>`).join('')}</div>`:''}
 function moveMonth(n){const d=new Date(state.calCursor);d.setMonth(d.getMonth()+n);state.calCursor=d.toISOString();save();calendar()}
 function formatDate(s){return new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric',weekday:'long'}).format(new Date(s+'T12:00:00'))}
@@ -1510,7 +1542,21 @@ document.addEventListener('click',e=>{const button=e.target.closest('[data-edit-
 function completeSession(id){const e=state.events.find(x=>String(x.id)===String(id));if(!e){toast('Seans bulunamadı. Sayfayı yenileyip tekrar dene.');return;}if(eventFinish(e)>Date.now()){toast('Seans tamamlandı olarak yalnızca seans bittikten sonra işaretlenebilir.');return;}if(!recordSessionResult(e,'completed',true))return;toast('Seans tamamlandı olarak kaydedildi.');render();}
 function openNoShow(id){const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned')return;if(eventFinish(e)>Date.now()){toast('No Show yalnızca seans bittikten sonra işaretlenebilir.');return;}openModal(`<h3>No Show işlemi</h3><div class="notice">Mazerete göre bu seansı paketten düşebilir veya düşmeyebilirsin.</div><div class="field"><label>Müşteri durumu</label><select id="nsReason"><option>Mazeretsiz gelmedi</option><option>Mazeretli gelmedi</option><option>Geç iptal</option><option>PT iptali</option></select></div><div class="field"><label>Seans paketten düşsün mü?</label><select id="nsCount"><option value="yes">Evet, seans say</option><option value="no">Hayır, sayma</option></select></div><div class="field"><label>Not</label><textarea id="nsNote" rows="3" placeholder="Opsiyonel not"></textarea></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="saveNs">No Show Kaydet</button></div>`);modal.querySelector('#saveNs').onclick=()=>{const count=modal.querySelector('#nsCount').value==='yes';if(!recordSessionResult(e,'noshow',count,modal.querySelector('#nsReason').value,modal.querySelector('#nsNote').value))return;closeModal();toast('No Show kaydedildi.');render();}}
 
-function requestSlot(id){const e=state.events.find(x=>String(x.id)===String(id));if(!e||e.type!=='availability'||!testEventVisible(e)||state.role!=='member')return;delete e.sharedTrainerAvailability;delete e.sourceSlotId;e.status='requested';e.type='session';e.createdBy=eventActor();e.customerId=state.customer.id;e.customerName=state.customer.name;delete e.groupId;delete e.rangeStart;delete e.rangeEnd;e.title='PT Randevu Talebi';state.messages.push({from:'member',text:`${formatShort(e.date)} ${eventTime(e)} için randevu talep ettim.`});save();toast('Randevu talebi PT’ye gönderildi.');calendar()}
+async function requestSlot(id){
+ const e=state.events.find(x=>String(x.id)===String(id));if(!e||e.type!=='availability'||!testEventVisible(e)||state.role!=='member')return;
+ if(navigator.onLine===false)return toast('Bağlantı yok. Talep gönderilemedi.');
+ if(eventStart(e)<=Date.now())return toast('Geçmiş saat için talep gönderilemez.');
+ if(e.requestBusy)return;e.requestBusy=true;
+ if(authUser&&!demoMode){
+  const ensureCurrent=liveContextGuard();
+  try{const {data,error}=await db.rpc('request_trainer_slot',{p_slot_id:String(e.id)});ensureCurrent();if(error)throw error;mergeSessionRequest(data);calendar();toast('Talep gönderildi. PT onayı bekleniyor.');}
+  catch(err){toast(err.message);}finally{delete e.requestBusy;}return;
+ }
+ const request={...e,id:'request-'+Date.now(),status:'requested',type:'session',requestOrigin:true,createdBy:eventActor(),customerId:state.customer.id,customerName:state.customer.name,title:'PT Randevu Talebi'};
+ delete e.requestBusy;delete request.requestBusy;delete request.sharedTrainerAvailability;delete request.sourceSlotId;delete request.groupId;delete request.rangeStart;delete request.rangeEnd;
+ if(state.events.some(x=>x.status==='requested'&&String(x.customerId)===String(state.customer.id)&&x.date===e.date&&x.time===e.time))return toast('Bu saat için talebin zaten bekliyor.');
+ state.events.push(request);save();toast('Talep gönderildi. PT onayı bekleniyor.');calendar();
+}
 function memberToday(){const todays=state.events.filter(e=>e.date===iso(today));const session=todays.filter(e=>isMemberEvent(e)&&e.status==='planned'&&activeEvent(e)).sort((a,b)=>eventStart(a)-eventStart(b))[0];view.innerHTML=`<div class="toolbar"><div><h1>Merhaba ${escapeHtml(state.customer.name.split(' ')[0])} 👋</h1><div class="muted">Bugün ne yapman gerekiyor?</div></div></div>
 ${nextEventHtml()}<div class="grid2"><div><div class="card"><div class="small muted">BUGÜN · ${formatDate(iso(today)).toUpperCase()}</div>${session?`<div style="margin-top:10px;font-size:28px;font-weight:900">${eventTime(session)}</div><div style="font-size:20px;font-weight:800">PT Antrenmanı · ${session.title}</div><div class="rightActions" style="margin-top:14px"><button class="btn primary" id="going">Geleceğim</button><button class="btn amber" id="late">Gecikeceğim</button><button class="btn ghost" id="resched">Değişiklik İste</button></div>`:'<div class="empty">Bugün PT seansı yok.</div>'}</div>
 <div class="card" style="margin-top:16px"><h2 class="sectionTitle">Bugünkü Görevler</h2>${state.tasks.filter(t=>t.date===iso(today)).map(t=>`<div class="hist"><div><b>${t.title}</b><div class="small muted">${t.status==='done'?t.result:'Bekliyor'}</div></div><span class="status ${t.status==='done'?'green':'amber'}">${t.status==='done'?'Tamamlandı':'Açık'}</span></div>`).join('')}</div></div>
