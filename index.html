@@ -949,8 +949,13 @@ function trimTrainerAvailability(slots,events=state.events){
    segments=segments.flatMap(([a,b])=>end<=a||start>=b?[[a,b]]:[[a,Math.max(a,start)],[Math.min(b,end),b]].filter(([x,y])=>y>x));
   }
   if(segments.length===1&&segments[0][0]===originalStart&&segments[0][1]===originalEnd)return [slot];
-  return segments.map(([start,end],index)=>({...slot,id:String(slot.sourceSlotId||slot.id)+'-free-'+start+'-'+end,sourceSlotId:slot.sourceSlotId||slot.id,time:clockTime(start),endTime:clockTime(end),availabilityFragment:index+1}));
+  return segments.map(([start,end],index)=>({...slot,id:String(slot.sourceSlotId||slot.id)+'-free-'+start+'-'+end,sourceSlotId:slot.sourceSlotId||slot.id,date:iso(new Date(start)),time:clockTime(start),endTime:clockTime(end),availabilityFragment:index+1}));
  });
+}
+// Derived PT view only: keep stored availability and edit/delete targets intact.
+function calendarDisplayEvents(){
+ if(state.role!=='pt')return state.events;
+ return state.events.flatMap(e=>e.type==='availability'?trimTrainerAvailability([e]).map(fragment=>({...fragment,id:e.id})):[e]);
 }
 function activeEvent(e,now=Date.now()){return !['completed','noshow','cancelled','canceled','rejected'].includes(e.status)&&eventFinish(e)>now;}
 function hasDelay(e){return e.type==='session'&&Number(e.delay?.minutes)>0&&activeEvent(e);}
@@ -1213,7 +1218,7 @@ function calendarEventForCustomer(e){
 }
 function calendar(){ const cursor=new Date(state.calCursor); const y=cursor.getFullYear(),m=cursor.getMonth(); const first=new Date(y,m,1), start=new Date(y,m,1-((first.getDay()+6)%7)); const cells=[]; for(let i=0;i<42;i++) cells.push(addDays(start,i));
  const showArchived=!!state.calendarShowArchived; const calendarCustomers=financeCustomers().filter(c=>showArchived||!c.archived); if(!showArchived&&state.calendarCustomerFilter&&state.calendarCustomerFilter!=='all'&&state.calendarCustomerFilter!=='pt_self'&&!calendarCustomers.some(c=>String(c.id)===String(state.calendarCustomerFilter)))state.calendarCustomerFilter='all';
- const selected=state.selectedDate||iso(today); const selEvents=state.events.filter(e=>e.date===selected&&testEventVisible(e)&&calendarEventForCustomer(e)).sort((a,b)=>a.time.localeCompare(b.time));
+ const selected=state.selectedDate||iso(today); const selEvents=calendarDisplayEvents().filter(e=>e.date===selected&&testEventVisible(e)&&calendarEventForCustomer(e)).sort((a,b)=>a.time.localeCompare(b.time));
  const customerOptions=state.role==='pt'?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select class="input" id="calendarCustomerFilter" style="max-width:220px"><option value="all">Tüm takvim</option><option value="pt_self" ${state.calendarCustomerFilter==='pt_self'?'selected':''}>Kendi takvimim</option>${calendarCustomers.map(c=>`<option value="${escapeHtml(String(c.id))}" ${String(state.calendarCustomerFilter||'all')===String(c.id)?'selected':''}>${escapeHtml(c.name)}${c.archived?' · Arşivde':''}</option>`).join('')}</select><label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap"><input type="checkbox" id="calendarShowArchived" ${showArchived?'checked':''}> Arşivi de göster</label></div>`:'';
  view.innerHTML=`<div class="toolbar"><div><h1>Takvim</h1><div class="muted">Geçmişi, geleceği, randevuları ve müsaitliği yönet.</div></div><div class="rightActions">${customerOptions}${state.role==='pt'?'<button class="btn primary" id="calAdd">+ Müsaitlik / İzin Ekle</button>':'<button class="btn primary" id="memberLeave">+ Müsait Değilim</button>'}</div></div>
  <div class="calendarWrap"><div class="calendar"><div class="calHead"><button class="btn ghost" id="prevM">‹ Önceki</button><div class="calTitle">${MONTHS[m]} ${y}</div><div class="calActions"><button class="btn ghost" id="todayM">Bugün</button> <button class="btn ghost" id="nextM">Sonraki ›</button></div></div>
@@ -1378,7 +1383,7 @@ function openEventEdit(id){
  };
 }
 function eventTime(e){return e.endTime?`${e.time}–${e.endTime}`:e.time;}
-function dayCell(d,month,selected){const ds=iso(d), ev=state.events.filter(e=>e.date===ds&&testEventVisible(e)&&calendarEventForCustomer(e)); const cls=['day']; if(d.getDay()===0||d.getDay()===6)cls.push('weekend'); if(d.getMonth()!==month)cls.push('dim'); if(ds===iso(today))cls.push('today'); if(ds===selected)cls.push('selected'); if(ev.some(e=>e.type==='off'||e.type==='memberoff'||e.status==='off'))cls.push('blocked'); const badges=ev.slice(0,2).map(e=>`<span class="dayBadge ${eventColor(e)}">${eventTime(e)} ${e.title}</span>`).join(''); return `<button class="${cls.join(' ')}" data-date="${ds}"><span class="dayNum">${d.getDate()}</span>${badges}<div class="dotRow">${ev.slice(0,4).map(e=>`<span class="dot ${eventColor(e)}"></span>`).join('')}</div></button>`}
+function dayCell(d,month,selected){const ds=iso(d), ev=calendarDisplayEvents().filter(e=>e.date===ds&&testEventVisible(e)&&calendarEventForCustomer(e)); const cls=['day']; if(d.getDay()===0||d.getDay()===6)cls.push('weekend'); if(d.getMonth()!==month)cls.push('dim'); if(ds===iso(today))cls.push('today'); if(ds===selected)cls.push('selected'); if(ev.some(e=>e.type==='off'||e.type==='memberoff'||e.status==='off'))cls.push('blocked'); const badges=ev.slice(0,2).map(e=>`<span class="dayBadge ${eventColor(e)}">${eventTime(e)} ${e.title}</span>`).join(''); return `<button class="${cls.join(' ')}" data-date="${ds}"><span class="dayNum">${d.getDate()}</span>${badges}<div class="dotRow">${ev.slice(0,4).map(e=>`<span class="dot ${eventColor(e)}"></span>`).join('')}</div></button>`}
 function eventColor(e){if(hasDelay(e))return 'amber';return e.type==='availability'?'green':(e.type==='off'||e.type==='memberoff')?'red':e.type==='demo'?'green':e.status==='completed'?'blue':e.status==='noshow'?'amber':'blue'}
 function eventCard(e){
  if(state.role==='pt'&&e.type==='session'&&e.status==='requested')return `<button type="button" class="eventItem" style="display:block;width:100%;text-align:left;cursor:pointer" data-review-request="${e.id}"><span class="eventStudent">${escapeHtml(eventCustomer(e)||'Öğrenci')}</span><span class="eventSessionTitle">${escapeHtml(e.title)}</span><span class="eventMeta" style="display:block">${escapeHtml(eventTime(e))} · PT Seansı · Onay bekliyor</span><span class="status amber" style="margin-top:10px">Talebi incele ›</span></button>`;
@@ -1664,7 +1669,7 @@ function renderLeavePanel(){
  }
  document.querySelector('#leavePanel')?.remove();
  if(!['dashboard','today','calendar'].includes(state.page))return;
- const leaves=state.events.filter(l=>(['off','memberoff'].includes(l.type)||(state.page==='calendar'&&l.type==='availability'))&&l.status!=='cancelled'&&eventFinish(l)>=Date.now()&&testEventVisible(l)&&(state.page==='calendar'?calendarEventForCustomer(l):visibleEvent(l))).sort((a,b)=>eventStart(a)-eventStart(b));
+ const leaves=calendarDisplayEvents().filter(l=>(['off','memberoff'].includes(l.type)||(state.page==='calendar'&&l.type==='availability'))&&l.status!=='cancelled'&&eventFinish(l)>=Date.now()&&testEventVisible(l)&&(state.page==='calendar'?calendarEventForCustomer(l):visibleEvent(l))).sort((a,b)=>eventStart(a)-eventStart(b));
  const conflicts=state.events.filter(e=>testEventVisible(e)&&(state.page==='calendar'?calendarEventForCustomer(e):visibleEvent(e))&&leaveConflicts(e).length);
  if(!leaves.length&&!conflicts.length)return;
  const panel=document.createElement('section');panel.id='leavePanel';panel.className='card';panel.style.marginTop='16px';
