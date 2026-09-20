@@ -265,6 +265,7 @@ async function syncCloudDataNow(){
   else {result=await db.from('clients').insert(row);if(result.error)delete c.dbId}
   ensureCurrent();if(result.error)throw result.error;
  }
+ await pruneDeletedCloudSessions();ensureCurrent();
  const byLocal=new Map(customers.map(c=>[String(c.id),c]));
  const sessions=(state.events||[]).filter(e=>e.type==='session'&&byLocal.has(String(e.customerId))&&!(e.status==='requested'||e.status==='rejected')&&!(state.role==='member'&&e.requestOrigin)).map(e=>{const c=byLocal.get(String(e.customerId));e.dbId=e.dbId||uuid();return {id:e.dbId,client_id:c.dbId,pt_id:state.role==='pt'?authUser.id:(e.ptId||c.ptId||null),starts_at:eventTimestamp(e.date,e.time),ends_at:e.endTime?eventTimestamp(e.date,e.endTime):null,request_origin:!!e.requestOrigin,status:sessionStatusToDb(e.status),workout_title:e.title||null,muscle_groups:Array.isArray(e.muscleGroups)?e.muscleGroups:[],salon:e.location||null,notes:e.note||e.sessionNote||null,counts_against_package:e.counts!==false,updated_at:new Date().toISOString()}});
  if(sessions.length){const {error}=await db.from('sessions').upsert(sessions,{onConflict:'id'});ensureCurrent();if(error)throw error}
@@ -297,7 +298,7 @@ async function loadCloudData(){
  const {data:sessions,error:sessionsError}=await db.from('sessions').select('*').order('starts_at');ensureCurrent();if(sessionsError)throw sessionsError;
  state.testPrimaryId=state.customer.id;
  const remoteEvents=(sessions||[]).map(s=>{const start=new Date(s.starts_at),end=s.ends_at?new Date(s.ends_at):null,c=[state.customer,...(state.manualCustomers||[])].find(x=>x.dbId===s.client_id);return {id:s.id,dbId:s.id,customerId:s.client_id,customerName:c?.name||'',date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(s.status),requestOrigin:!!s.request_origin,title:s.workout_title||'PT Seansı',muscleGroups:s.muscle_groups||[],location:s.salon||'',note:s.notes||'',counts:s.counts_against_package,ptId:s.pt_id,cloudManaged:true}});
- state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await loadClientHistories();ensureCurrent();await loadMemberTrainer();ensureCurrent();await loadTrainerAvailability();ensureCurrent();await loadClientInvitations();ensureCurrent();await loadLiveTasks();ensureCurrent();if(typeof loadTransferData==='function'){await loadTransferData();ensureCurrent();}liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy){await syncCloudDataNow();ensureCurrent();}localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
+ state.events=(state.events||[]).filter(e=>!e.cloudManaged&&!remoteEvents.some(r=>r.dbId===e.dbId)).concat(remoteEvents);await pruneDeletedCloudSessions();ensureCurrent();await loadClientHistories();ensureCurrent();await loadMemberTrainer();ensureCurrent();await loadTrainerAvailability();ensureCurrent();await loadClientInvitations();ensureCurrent();await loadLiveTasks();ensureCurrent();if(typeof loadTransferData==='function'){await loadTransferData();ensureCurrent();}liveStateOwner=authUser.id;state.isolationVersion=1;if(!cloudState||migratedLegacy){await syncCloudDataNow();ensureCurrent();}localStorage.removeItem('pitiAccount:'+authUser.id);persistState();render();
 }
 let demoLoadSequence=0;
 async function loadDemoData(){
@@ -1009,17 +1010,28 @@ function mergeSessionRequest(row){
  const e={...old,id:row.id,dbId:row.id,customerId:row.client_id,customerName:c.name||'',ptId:row.pt_id,date:start.toLocaleDateString('en-CA'),time:start.toTimeString().slice(0,5),endTime:end?.toTimeString().slice(0,5)||'',type:'session',status:sessionStatusFromDb(row.status),requestOrigin:true,title:row.workout_title||'PT Randevu Talebi',muscleGroups:row.muscle_groups||[],location:row.salon||'',note:row.notes||'',counts:row.counts_against_package,cloudManaged:true,createdBy:row.status==='requested'?'member:'+row.client_id:'pt'};
  if(old)Object.assign(old,e);else state.events.push(e);
 }
+async function pruneDeletedCloudSessions(){
+ if(!authUser||demoMode||!db)return false;
+ const ids=[...new Set(state.events.filter(e=>e.type==='session').map(e=>String(e.dbId||e.id)).filter(id=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))];
+ if(!ids.length)return false;
+ const ensureCurrent=liveContextGuard();
+ const {data,error}=await db.rpc('get_deleted_session_ids',{p_session_ids:ids});ensureCurrent();if(error)throw error;
+ if(!Array.isArray(data))throw Error('Silinen seanslar doğrulanamadı.');
+ const deleted=new Set(data.map(String)),before=state.events.length;
+ state.events=state.events.filter(e=>e.type!=='session'||!deleted.has(String(e.dbId||e.id)));
+ return before!==state.events.length;
+}
 let requestRefreshBusy=false;
 async function refreshSessionRequests(){
  if(requestRefreshBusy||!authUser||demoMode||adminMode||navigator.onLine===false||document.hidden||!['dashboard','today','calendar'].includes(state.page)||modalBack.classList.contains('show'))return;
- requestRefreshBusy=true;const ensureCurrent=liveContextGuard(),before=JSON.stringify(state.events.filter(e=>e.requestOrigin));
+ requestRefreshBusy=true;const ensureCurrent=liveContextGuard(),before=JSON.stringify(state.events);
  try{
-  await cloudSyncChain;ensureCurrent();
+  await cloudSyncChain.catch(()=>{});ensureCurrent();await pruneDeletedCloudSessions();ensureCurrent();
   const {data,error}=await db.from('sessions').select('*').eq('request_origin',true);ensureCurrent();if(error)throw error;
   const ids=new Set((data||[]).map(r=>String(r.id)));
   state.events=state.events.filter(e=>!e.requestOrigin||!e.cloudManaged||ids.has(String(e.dbId||e.id)));
   (data||[]).forEach(mergeSessionRequest);
-  if(before!==JSON.stringify(state.events.filter(e=>e.requestOrigin))&&!modalBack.classList.contains('show'))render();
+  if(before!==JSON.stringify(state.events)&&!modalBack.classList.contains('show'))render();
  }catch{}finally{requestRefreshBusy=false;}
 }
 setInterval(refreshSessionRequests,10000);
@@ -1307,7 +1319,33 @@ function deleteCalendarEntry(id){
  modal.querySelectorAll('select,input').forEach(el=>el.addEventListener('change',update));update();
  modal.querySelector('#confirmDeleteCalendar').onclick=()=>{const rows=targets();if(!rows.length||!rows.every(e=>state.events.includes(e)&&canDeletePTCalendarEntry(e)))return toast('Kayıt değişti. Yeniden açıp kontrol et.');state.events=state.events.filter(e=>!rows.includes(e));save();closeModal();calendar();toast(rows.length+' müsaitlik / izin kaydı silindi.');};
 }
-function deletePlannedSession(id){const e=state.events.find(e=>String(e.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned'||eventOwner(e)!=='pt')return toast('Yalnızca kendi planlı seanslarını silebilirsin.');openModal(`<h3>Seansı sil</h3><p><b>${escapeHtml(eventCustomer(e))}</b> için ${formatShort(e.date)} · ${escapeHtml(eventTime(e))} tarihli seans silinecek.</p><div class="notice">Öğrenciye uygulama içi bildirim gönderilecek.</div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn red" id="confirmDeleteSession">Evet, seansı sil</button></div>`);modal.querySelector('#confirmDeleteSession').onclick=()=>{if(!state.events.includes(e))return closeModal();state.events=state.events.filter(x=>x!==e);state.messages.push({from:'pt',eventId:e.id,text:`${formatShort(e.date)} ${eventTime(e)} tarihli ${e.title} seansı PT tarafından silindi.`});state.unread=state.unread||{pt:0,member:0};state.unread.member=(state.unread.member||0)+1;notifyBooking(e,'PT planlanan seansı sildi.');save();closeModal();toast('Seans silindi; öğrenciye bildirim gönderildi.');calendar();};}
+function deletePlannedSession(id){const e=state.events.find(e=>String(e.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned'||eventOwner(e)!=='pt')return toast('Yalnızca kendi planlı seanslarını silebilirsin.');openModal(`<h3>Seansı sil</h3><p><b>${escapeHtml(eventCustomer(e))}</b> için ${formatShort(e.date)} · ${escapeHtml(eventTime(e))} tarihli seans silinecek.</p><div class="notice">Öğrenciye uygulama içi bildirim gönderilecek.</div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn red" id="confirmDeleteSession">Evet, seansı sil</button></div>`);modal.querySelector('#confirmDeleteSession').onclick=async()=>{
+ const button=modal.querySelector('#confirmDeleteSession');if(button.disabled)return;
+ if(state.role!=='pt'||!state.events.includes(e)||e.status!=='planned'||eventOwner(e)!=='pt')return toast('Seans değişti. Yeniden açıp kontrol et.');
+ if(navigator.onLine===false)return toast('Bağlantı yok. Seans silinmedi.');
+ button.disabled=true;button.textContent='Siliniyor…';
+ try{
+  if(!demoMode){
+   if(!authUser||!db)throw Error('PT hesabına tekrar giriş yap.');
+   const ensureCurrent=liveContextGuard();clearTimeout(cloudSyncTimer);
+   const job=cloudSyncChain.catch(()=>{}).then(async()=>{
+    ensureCurrent();
+    if(!e.dbId){await syncCloudDataNow();ensureCurrent();}
+    if(!e.dbId)throw Error('Seansın sunucu kaydı doğrulanamadı.');
+    const {data,error}=await db.rpc('delete_planned_session',{p_session_id:e.dbId});
+    ensureCurrent();if(error)throw error;
+    if(data?.deleted!==true||String(data.id)!==String(e.dbId))throw Error('Sunucu silme işlemini doğrulamadı.');
+    state.events=state.events.filter(x=>String(x.dbId||x.id)!==String(e.dbId));
+   });
+   cloudSyncChain=job;await job;ensureCurrent();
+  }else{
+   state.events=state.events.filter(x=>x!==e);
+   state.messages.push({from:'pt',eventId:e.id,text:`${formatShort(e.date)} ${eventTime(e)} tarihli ${e.title} seansı PT tarafından silindi.`});
+   state.unread=state.unread||{pt:0,member:0};state.unread.member=(state.unread.member||0)+1;
+  }
+  notifyBooking(e,'PT planlanan seansı sildi.');save();closeModal();toast('Seans silindi; öğrenciye bildirim gönderildi.');calendar();
+ }catch(error){button.disabled=false;button.textContent='Evet, seansı sil';toast('Silme doğrulanamadı: '+error.message);}
+};}
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-review-request]');if(b)openAppointmentReview(b.dataset.reviewRequest);});
 function openAppointmentReview(id){
  const e=state.events.find(x=>String(x.id)===String(id));
