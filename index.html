@@ -935,6 +935,23 @@ function kpi(label,val,hint){return `<div class="card kpi"><span class="kpiIcon"
 function isMemberEvent(e){return e.type==='session'&&(e.customerId==null||String(e.customerId)===String(state.customer.id));}
 function eventStart(e){return new Date(e.date+'T'+(/^\d{2}:\d{2}$/.test(e.time)?e.time:'00:00')+':00').getTime();}
 function eventFinish(e){const start=eventStart(e);if(e.time==='Tüm gün')return new Date(e.date+'T23:59:59').getTime();if(e.endTime){let end=new Date(e.date+'T'+e.endTime+':00').getTime();if(end<=start)end+=86400000;return end;}return start+60*60000;}
+function clockTime(ms){const d=new Date(ms);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function bookingBlocksAvailability(e){return ['session','demo'].includes(e.type)&&['planned','requested'].includes(e.status);}
+function availabilityBlocked(e,events=state.events){return events.some(x=>x.id!==e.id&&bookingBlocksAvailability(x)&&eventStart(x)<eventFinish(e)&&eventFinish(x)>eventStart(e));}
+function availableToRequest(e){return e?.type==='availability'&&e.status==='open'&&testEventVisible(e)&&!availabilityBlocked(e);}
+function trimTrainerAvailability(slots,events=state.events){
+ const bookings=events.filter(bookingBlocksAvailability).sort((a,b)=>eventStart(a)-eventStart(b));
+ return slots.flatMap(slot=>{
+  if(slot.type!=='availability'||slot.status!=='open')return [slot];
+  const originalStart=eventStart(slot),originalEnd=eventFinish(slot);let segments=[[originalStart,originalEnd]];
+  for(const booking of bookings){
+   const start=eventStart(booking),end=eventFinish(booking);if(start>=originalEnd||end<=originalStart)continue;
+   segments=segments.flatMap(([a,b])=>end<=a||start>=b?[[a,b]]:[[a,Math.max(a,start)],[Math.min(b,end),b]].filter(([x,y])=>y>x));
+  }
+  if(segments.length===1&&segments[0][0]===originalStart&&segments[0][1]===originalEnd)return [slot];
+  return segments.map(([start,end],index)=>({...slot,id:String(slot.sourceSlotId||slot.id)+'-free-'+start+'-'+end,sourceSlotId:slot.sourceSlotId||slot.id,time:clockTime(start),endTime:clockTime(end),availabilityFragment:index+1}));
+ });
+}
 function activeEvent(e,now=Date.now()){return !['completed','noshow','cancelled','canceled','rejected'].includes(e.status)&&eventFinish(e)>now;}
 function hasDelay(e){return e.type==='session'&&Number(e.delay?.minutes)>0&&activeEvent(e);}
 function eventCustomer(e){return e.customerName||(isMemberEvent(e)?state.customer.name:'');}
@@ -1414,7 +1431,8 @@ async function loadTrainerAvailability(){
  if(!authUser||demoMode||state.role!=='member')return;
  const ensureCurrent=liveContextGuard();
  const {data,error}=await db.rpc('get_my_trainer_availability');ensureCurrent();if(error)throw error;
- state.events=state.events.filter(e=>!e.sharedTrainerAvailability&&!(['availability','off'].includes(e.type)&&e.customerId==null)).concat(Array.isArray(data)?data:[]);
+ const base=state.events.filter(e=>!e.sharedTrainerAvailability&&!(['availability','off'].includes(e.type)&&e.customerId==null));
+ state.events=base.concat(trimTrainerAvailability(Array.isArray(data)?data:[],base));
 }
 async function refreshTrainerCalendar(){
  try{await loadTrainerAvailability();if(state.page==='calendar'&&state.role==='member'){calendar();renderLeavePanel();}}catch(e){toast('PT müsaitlikleri yenilenemedi: '+e.message);}
@@ -1543,7 +1561,8 @@ function completeSession(id){const e=state.events.find(x=>String(x.id)===String(
 function openNoShow(id){const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned')return;if(eventFinish(e)>Date.now()){toast('No Show yalnızca seans bittikten sonra işaretlenebilir.');return;}openModal(`<h3>No Show işlemi</h3><div class="notice">Mazerete göre bu seansı paketten düşebilir veya düşmeyebilirsin.</div><div class="field"><label>Müşteri durumu</label><select id="nsReason"><option>Mazeretsiz gelmedi</option><option>Mazeretli gelmedi</option><option>Geç iptal</option><option>PT iptali</option></select></div><div class="field"><label>Seans paketten düşsün mü?</label><select id="nsCount"><option value="yes">Evet, seans say</option><option value="no">Hayır, sayma</option></select></div><div class="field"><label>Not</label><textarea id="nsNote" rows="3" placeholder="Opsiyonel not"></textarea></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="saveNs">No Show Kaydet</button></div>`);modal.querySelector('#saveNs').onclick=()=>{const count=modal.querySelector('#nsCount').value==='yes';if(!recordSessionResult(e,'noshow',count,modal.querySelector('#nsReason').value,modal.querySelector('#nsNote').value))return;closeModal();toast('No Show kaydedildi.');render();}}
 
 async function requestSlot(id){
- const e=state.events.find(x=>String(x.id)===String(id));if(!e||e.type!=='availability'||!testEventVisible(e)||state.role!=='member')return;
+ const e=state.events.find(x=>String(x.id)===String(id));if(!e||state.role!=='member')return;
+ if(!availableToRequest(e))return toast('Bu saat artık müsait değil.');
  if(navigator.onLine===false)return toast('Bağlantı yok. Talep gönderilemedi.');
  if(eventStart(e)<=Date.now())return toast('Geçmiş saat için talep gönderilemez.');
  if(e.requestBusy)return;e.requestBusy=true;
@@ -1563,7 +1582,7 @@ ${nextEventHtml()}<div class="grid2"><div><div class="card"><div class="small mu
 <div><div class="packageHero"><div class="small" style="opacity:.85">Paketim</div><div style="font-size:22px;font-weight:900">${state.package?.name||'Paket tanımsız'}</div><div class="packageStats"><div class="packageStat"><b>${sessionsLeft()}</b><span>Seans</span></div><div class="packageStat"><b>${daysLeft()}</b><span>Gün</span></div><div class="packageStat"><b>${state.payment.status==='approved'?'✓':'!'}</b><span>Ödeme</span></div></div><div class="small" style="margin-top:12px;opacity:.9">Son gün: ${packageEndLabel()}</div></div><div class="card" style="margin-top:16px"><h2 class="sectionTitle">PT’den Mesaj</h2><div>${escapeHtml(state.messages.at(-1)?.text||'Henüz mesaj yok.')}</div><button class="btn ghost" style="margin-top:12px" id="goMsg">Mesajlara Git</button></div></div></div>`;
  bindHomeEvents();if(document.querySelector('#going'))document.querySelector('#going').onclick=()=>{delete session.delay;state.messages.push({from:'member',text:formatShort(session.date)+' '+session.time+' randevusuna zamanında geleceğim.'});state.unread=state.unread||{pt:0,member:0};state.unread.pt=(state.unread.pt||0)+1;save();toast('PT’ye bildirildi; varsa gecikme bilgisi kaldırıldı.');render();};if(document.querySelector('#late'))document.querySelector('#late').onclick=()=>openLate(session.id);if(document.querySelector('#resched'))document.querySelector('#resched').onclick=()=>openReschedule();document.querySelector('#goMsg').onclick=()=>nav('messages')}
 function openLate(id){const session=state.events.find(e=>e.id===id);if(state.role!=='member'||!session||!isMemberEvent(session)||session.status!=='planned'||!activeEvent(session))return toast('Aktif bir seans bulunamadı.');openModal(`<h3>Gecikeceğim</h3><div class="notice">${formatShort(session.date)} · ${escapeHtml(session.time)} · ${escapeHtml(session.title)}</div><div class="field"><label for="lateM">Yaklaşık gecikme</label><select id="lateM">${[5,10,15,30].map(n=>`<option value="${n}" ${n===(session.delay?.minutes||10)?'selected':''}>${n} dakika</option>`).join('')}</select></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="sendLate">PT'ye Bildir</button></div>`);modal.querySelector('#sendLate').onclick=()=>{if(!activeEvent(session)||session.status!=='planned')return toast('Bu seans artık aktif değil.');const minutes=Number(modal.querySelector('#lateM').value);session.delay={minutes,customerId:state.customer.id,customerName:state.customer.name,reportedAt:new Date().toISOString()};state.messages.push({from:'member',eventId:session.id,text:`${formatShort(session.date)} ${session.time} · ${session.title} randevusuna yaklaşık ${minutes} dakika gecikeceğim. Tahmini varış: ${arrivalTime(session)}.`});state.unread=state.unread||{pt:0,member:0};state.unread.pt=(state.unread.pt||0)+1;save();closeModal();toast('Gecikme PT’ye bildirildi.');render();}}
-function openReschedule(){const opts=state.events.filter(e=>e.type==='availability'&&e.status==='open'&&new Date(e.date)>=today);openModal(`<h3>Randevu değişikliği iste</h3><div class="field"><label>Sebep</label><textarea id="rsReason" rows="3" placeholder="Örn. toplantım uzayacak"></textarea></div><div class="field"><label>Yeni uygun saat</label><select id="rsSlot">${opts.map(e=>`<option value="${e.id}">${formatShort(e.date)} · ${eventTime(e)}</option>`).join('')||'<option value="">Uygun slot yok</option>'}</select></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendRs">Talep Gönder</button></div>`);modal.querySelector('#sendRs').onclick=()=>{const id=+modal.querySelector('#rsSlot').value;if(id){const e=state.events.find(x=>x.id===id);state.messages.push({from:'member',text:`Randevu değişikliği talebi: ${formatShort(e.date)} ${eventTime(e)}. Sebep: ${modal.querySelector('#rsReason').value||'Belirtilmedi'}`});save();closeModal();toast('Değişiklik talebi PT’ye gönderildi.')}else toast('Uygun slot bulunamadı.')}}
+function openReschedule(){const opts=state.events.filter(e=>availableToRequest(e)&&new Date(e.date)>=today);openModal(`<h3>Randevu değişikliği iste</h3><div class="field"><label>Sebep</label><textarea id="rsReason" rows="3" placeholder="Örn. toplantım uzayacak"></textarea></div><div class="field"><label>Yeni uygun saat</label><select id="rsSlot">${opts.map(e=>`<option value="${e.id}">${formatShort(e.date)} · ${eventTime(e)}</option>`).join('')||'<option value="">Uygun slot yok</option>'}</select></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendRs">Talep Gönder</button></div>`);modal.querySelector('#sendRs').onclick=()=>{const id=modal.querySelector('#rsSlot').value;if(id){const e=state.events.find(x=>String(x.id)===String(id));state.messages.push({from:'member',text:`Randevu değişikliği talebi: ${formatShort(e.date)} ${eventTime(e)}. Sebep: ${modal.querySelector('#rsReason').value||'Belirtilmedi'}`});save();closeModal();toast('Değişiklik talebi PT’ye gönderildi.')}else toast('Uygun slot bulunamadı.')}}
 function messages(){return liveMessages()}
 function sendMessage(){return sendLiveMessage()}
 
@@ -1761,7 +1780,7 @@ function switchTestUser(id,role,page){
  ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'].forEach(k=>state[k]=a[k]);
  state.role=role;state.financeCustomerId=id;state.page=page||(role==='pt'?'dashboard':'today');state.selectedDate=iso(today);closeModal();save();render();
 }
-function testEventVisible(e){if(state.role==='pt')return true;if(e.customerId==null&&['availability','off'].includes(e.type))return memberCanSeeAvailability(e);return e.customerId!=null?String(e.customerId)===String(state.customer.id):['availability','off'].includes(e.type);}
+function testEventVisible(e){if(state.role==='pt')return true;if(e.customerId==null&&['availability','off'].includes(e.type))return memberCanSeeAvailability(e)&&(e.type!=='availability'||!availabilityBlocked(e));return e.customerId!=null?String(e.customerId)===String(state.customer.id):['availability','off'].includes(e.type);}
 function renderTestLauncher(){
  const existing=document.querySelector('#testUserLauncher');if(!demoMode||adminMode){existing?.remove();document.querySelector('#testChatCustomer')?.closest('.field')?.remove();return;}
 
