@@ -16,12 +16,12 @@ export default {
         const parsed = JSON.parse(body);
         if (!['demo','demo_versions','save_demo','restore_demo'].includes(parsed.action)) return json(400, 'Geçersiz demo işlemi.');
         const upstream = await fetch('https://ldufxzwgwbaogpmwqhlw.supabase.co/functions/v1/demo-admin', {
-          method:'POST', headers:{'Authorization':authorization,'Content-Type':'application/json','Origin':url.origin}, body, signal:AbortSignal.timeout(35000), redirect:'error'
+          method:'POST', headers:{'apikey':'sb_publishable_zmPhdwrGsRLY1B0XYb2ssg_8_qE67D7','Authorization':authorization,'Content-Type':'application/json','Origin':url.origin}, body, signal:AbortSignal.timeout(35000), redirect:'error'
         });
         const text = await upstream.text();
         try { JSON.parse(text); } catch { return json(502, 'DEMO servisi şu anda yanıt veremiyor. Tekrar deneyin.'); }
         return new Response(text,{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
-      } catch { return json(502, 'DEMO servisine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.'); }
+      } catch(error) { return json(502, 'DEMO servisine ulaşılamadı. ('+error.name+': '+error.message+')'); }
     }
     const response = await env.ASSETS.fetch(request);
 
