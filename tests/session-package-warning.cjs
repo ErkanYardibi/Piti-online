@@ -1,0 +1,33 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom');
+const fs=require('fs'),assert=require('assert/strict');
+const html=fs.readFileSync('index.html','utf8').replace('<script src="/vendor/supabase.min.js"></script>','').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();');
+const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
+const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{}}});
+try{
+ const w=dom.window,d=w.document;w.fixture=JSON.parse(fs.readFileSync('assets/demo-state.json'));
+ w.testRun("demoMode=true;authUser=null;state=clone(window.fixture);state.role='pt';state.page='calendar';state.selectedDate='2099-10-01';state.calCursor='2099-10-01T12:00:00';state.calendarCustomerFilter=String(state.customer.id);state.events=[];state.package=null;window.e={id:'package-test',type:'session',status:'planned',customerId:state.customer.id,date:state.selectedDate,time:'18:00',endTime:'19:00',title:'PT Seansı'};save=()=>{};");
+ assert.match(w.testRun('sessionPackageWarning(window.e)'),/aktif paketi yok/);
+ w.testRun('openPTSession()');assert.ok(d.querySelector('#psPackageWarning .sessionPackageWarning'));assert.equal(d.querySelector('#psSave').disabled,false);
+ d.querySelector('#psSave').click();assert.equal(w.testRun('state.events.length'),1,'no package never blocks scheduling');
+ assert.ok(d.querySelector('.sessionPackageWarning'));
+ assert.match(w.testRun('nextEventHtml()'),/Paket hatırlatması/);
+ w.testRun("state.role='member'");assert.match(w.testRun('eventCard(window.e)'),/PT’nizle görüşün/);
+ w.testRun("state.package={status:'active',start:'2099-09-01',end:'2099-10-31',totalSessions:12,usedSessions:12,rule:'Hangisi önce biterse'}");
+ assert.match(w.testRun('sessionPackageWarning(window.e)'),/Seans hakkı tükendi/);
+ w.testRun("state.package.usedSessions=0;state.package.end='2000-01-01'");assert.match(w.testRun('sessionPackageWarning(window.e)'),/süresi doldu/);
+ w.testRun("state.package.end='2099-09-30'");assert.match(w.testRun('sessionPackageWarning(window.e)'),/seans tarihini kapsamıyor/);
+ w.testRun("state.package.end='2099-10-01'");assert.equal(w.testRun('sessionPackageWarning(window.e)'),'','expiry day included');
+ w.testRun("state.package.end='2000-01-01';state.package.rule='Sadece seans bitince'");assert.equal(w.testRun('sessionPackageWarning(window.e)'),'');
+ w.testRun("state.package.end='2099-10-31';state.package.usedSessions=12;state.package.rule='Sadece süre bitince'");assert.equal(w.testRun('sessionPackageWarning(window.e)'),'');
+ w.testRun("state.package=null");
+ for(const status of ['completed','noshow','cancelled','rejected'])assert.equal(w.testRun(`sessionPackageWarning({...window.e,status:'${status}'})`),'');
+ assert.equal(w.testRun("sessionPackageWarning({...window.e,type:'demo',free:true})"),'');
+ w.testRun("state.role='pt';window.other=financeCustomers().find(c=>String(c.id)!==String(state.customer.id));state.package={status:'active',start:'2099-09-01',end:'2099-10-31',totalSessions:12,usedSessions:0};state.customerAccounts[window.other.id]={customer:window.other,package:null}");
+ assert.match(w.testRun('sessionPackageWarning({...window.e,customerId:window.other.id})'),/aktif paketi yok/,'uses selected student, not main account package');
+ assert.equal(w.testRun('sessionPackageWarning(window.e)'),'','renewal clears warning');
+ assert.ok(!w.testRun('eventCard(window.e)').includes('sessionPackageWarning'));
+ assert.ok(!w.testRun('nextEventHtml()').includes('sessionPackageWarning'));
+ w.testRun('openPTSession()');d.querySelector('#psCustomer').value=String(w.other.id);d.querySelector('#psCustomer').dispatchEvent(new w.Event('change'));
+ assert.ok(d.querySelector('#psPackageWarning .sessionPackageWarning'),'selection updates planning reminder');
+ assert.deepEqual(errors,[]);console.log('PASS: both roles, no package/nonblocking planning, exhausted/expired, expiry day, package rules, renewal, selected student and free-demo exclusion');
+}finally{dom.window.close()}
