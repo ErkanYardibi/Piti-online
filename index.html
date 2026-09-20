@@ -1026,7 +1026,7 @@ setInterval(refreshSessionRequests,10000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSessionRequests();});
 function pendingAppointments(){return homeEvents().filter(e=>e.status==='requested').sort((a,b)=>eventStart(a)-eventStart(b));}
 function pendingPayments(){return visibleCustomers().filter(c=>(String(c.id)===String(state.customer.id)?state.payment:state.customerAccounts?.[c.id]?.payment)?.status==='pending');}
-function taskOmitted(t){const mark=state.omittedOverdueTasks?.[String(t.id)];return state.role==='pt'&&mark?.owner===chatActorId()&&mark.dueAt===t.due_at}
+function taskOmitted(t){const mark=state.omittedOverdueTasks?.[String(t.id)];return state.role==='pt'&&!!mark&&mark.owner===chatActorId()&&mark.dueAt===t.due_at}
 function overdueTasks(includeOmitted=false){return activeTaskRows().filter(t=>t.status!=='done'&&t.due_at&&new Date(t.due_at)<new Date()&&(includeOmitted||!taskOmitted(t)));}
 function homeKpi(label,value,hint,action){return `<button type="button" class="card kpi homeShortcut" data-home-action="${action}"><span class="kpiIcon">${metricIcon(label)}</span><div class="kpiLabel">${label}</div><div class="kpiVal">${value}</div><div class="kpiHint">${hint} · Görüntüle</div></button>`;}
 function personAvatar(name,photo=''){const initials=escapeHtml((name||'?').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase());return `<span class="personAvatar">${photo?`<img src="${photo}" alt="">`:initials}</span>`}
@@ -1237,7 +1237,7 @@ function calendar(){ const cursor=new Date(state.calCursor); const y=cursor.getF
  document.querySelectorAll('[data-complete-session]').forEach(b=>b.onclick=()=>completeSession(b.dataset.completeSession));
  document.querySelectorAll('[data-edit-event]').forEach(b=>b.onclick=()=>openEventEdit(b.dataset.editEvent));
  document.querySelectorAll('[data-delete-calendar]').forEach(b=>b.onclick=()=>deleteCalendarEntry(b.dataset.deleteCalendar));
- document.querySelectorAll('[data-delete-session]').forEach(b=>b.onclick=()=>deletePlannedSession(+b.dataset.deleteSession));
+ document.querySelectorAll('[data-delete-session]').forEach(b=>b.onclick=()=>deletePlannedSession(b.dataset.deleteSession));
  document.querySelectorAll('[data-noshow]').forEach(b=>b.onclick=()=>openNoShow(b.dataset.noshow));
  document.querySelectorAll('[data-request-slot]').forEach(b=>b.onclick=()=>requestSlot(b.dataset.requestSlot));
  renderLeavePanel();
@@ -1547,9 +1547,9 @@ function renderResultApprovals(){
  const rows=state.events.filter(e=>e.confirmation&&(state.page==='calendar'?calendarEventForCustomer(e):visibleEvent(e))&&(state.role==='pt'||e.customerId==null||String(e.customerId)===String(state.customer.id))).sort((a,b)=>b.confirmation.createdAt.localeCompare(a.confirmation.createdAt));
  if(!rows.length)return;
  const card=document.createElement('div');card.className='card';card.style.marginTop='16px';card.innerHTML='<h2 class="sectionTitle">Seans Sonuçları ve Onaylar</h2>'+rows.map(e=>{const c=e.confirmation;const latest=e.resultHistory?.at(-1);const old=latest?.previous.status;return `<div class="eventItem"><b>${escapeHtml(eventCustomer(e))} · ${formatShort(e.date)}</b><p>${escapeHtml(e.title)} · ${e.status==='cancelled'?(e.lateCancellation?'Geç iptal':'İptal edildi'):e.status==='planned'?'Ertelendi / Planlı':e.status==='completed'?'Tamamlandı':'No Show'} · ${e.counts?'Seans sayıldı':'Seans sayılmadı'}</p>${old&&old!=='planned'?`<p class="small muted">Önceki sonuç: ${old==='completed'?'Tamamlandı':'No Show'} · ${latest.previous.counts?'Seans sayıldı':'Seans sayılmadı'}</p>`:''}<p>${c.status==='pending'?'Onay bekliyor · Son yanıt: '+new Date(c.deadline).toLocaleString('tr-TR'):c.status==='auto'?'Süre doldu · Otomatik kabul edildi':c.status==='disputed'?'İtiraz edildi · PT incelemesi bekliyor':'Müşteri onayladı'}</p>${state.role==='member'&&c.status==='pending'?`<div class="rightActions"><button class="btn primary" data-result-accept="${e.id}">Onayla</button><button class="btn ghost" data-result-dispute="${e.id}">İtiraz Et</button></div>`:''}${state.role==='pt'&&e.status!=='cancelled'?`<button class="btn ghost" data-edit-result="${e.id}">Sonucu Düzenle</button>`:''}</div>`}).join('');view.appendChild(card);
- const respond=(id,status)=>{const e=state.events.find(x=>x.id===id);if(state.role!=='member'||!e||e.customerId!=null&&String(e.customerId)!==String(state.customer.id)||e.confirmation.status!=='pending')return;if(Date.now()>=Date.parse(e.confirmation.deadline)){render();return;}e.confirmation.status=status;e.confirmation.respondedAt=new Date().toISOString();save();render();toast(status==='accepted'?'Seans sonucu onaylandı.':'İtirazın PT incelemesine alındı.');};
- card.querySelectorAll('[data-result-accept]').forEach(b=>b.onclick=()=>respond(+b.dataset.resultAccept,'accepted'));
- card.querySelectorAll('[data-result-dispute]').forEach(b=>b.onclick=()=>respond(+b.dataset.resultDispute,'disputed'));
+ const respond=(id,status)=>{const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='member'||!e||e.customerId!=null&&String(e.customerId)!==String(state.customer.id)||e.confirmation.status!=='pending')return;if(Date.now()>=Date.parse(e.confirmation.deadline)){render();return;}e.confirmation.status=status;e.confirmation.respondedAt=new Date().toISOString();save();render();toast(status==='accepted'?'Seans sonucu onaylandı.':'İtirazın PT incelemesine alındı.');};
+ card.querySelectorAll('[data-result-accept]').forEach(b=>b.onclick=()=>respond(b.dataset.resultAccept,'accepted'));
+ card.querySelectorAll('[data-result-dispute]').forEach(b=>b.onclick=()=>respond(b.dataset.resultDispute,'disputed'));
 }
 function editSessionResult(id){
  const e=state.events.find(x=>String(x.id)===String(id));
@@ -1615,7 +1615,7 @@ function cancelLeaveSession(e,late=false,count=false){
  delete e.delay;leaveAudit(e,previous,e.lateCancellation?'Geç iptal':'İzin nedeniyle iptal');return true;
 }
 function openLeaveDecision(id){
- const e=state.events.find(x=>x.id===id);if(state.role!=='pt'||!e||!leaveConflicts(e).length)return;
+ const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='pt'||!e||!leaveConflicts(e).length)return;
  const ptLeave=leaveConflicts(e).some(l=>l.type==='off');
  openModal(`<h3>İzinle çakışan seans</h3><p>${escapeHtml(eventCustomer(e))} · ${formatShort(e.date)} · ${escapeHtml(e.time)}</p><div class="field"><label>İşlem</label><select id="leaveAction"><option value="cancel">İptal et</option><option value="move">Başka tarihe ertele</option></select></div><div id="moveFields" hidden><div class="field"><label>Yeni tarih</label><input class="input" type="date" id="moveDate" value="${e.date}"></div><div class="field"><label>Yeni başlangıç saati</label><input class="input" type="time" id="moveTime" value="${e.time}"></div></div><div id="cancelFields">${ptLeave?'<p>PT izni: paketten seans düşülmez.</p>':'<div class="field"><label><input type="checkbox" id="lateCancel"> Son dakika müşteri iptali (Geç iptal)</label></div><div class="field"><label><input type="checkbox" id="chargeCancel"> Geç iptalde seans paketten düşsün</label></div>'}</div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveLeaveDecision">Kaydet ve Müşteriye Bildir</button></div>`);
  modal.querySelector('#leaveAction').onchange=e=>{modal.querySelector('#moveFields').hidden=e.target.value!=='move';modal.querySelector('#cancelFields').hidden=e.target.value==='move';};
@@ -1679,7 +1679,7 @@ function renderLeavePanel(){
  view.appendChild(panel);
  panel.querySelectorAll('[data-list-edit-calendar]').forEach(b=>b.onclick=()=>openEventEdit(b.dataset.listEditCalendar));
  panel.querySelectorAll('[data-list-delete-calendar]').forEach(b=>b.onclick=()=>deleteCalendarEntry(b.dataset.listDeleteCalendar));
- panel.querySelectorAll('[data-leave-decision]').forEach(b=>b.onclick=()=>openLeaveDecision(+b.dataset.leaveDecision));
+ panel.querySelectorAll('[data-leave-decision]').forEach(b=>b.onclick=()=>openLeaveDecision(b.dataset.leaveDecision));
  panel.querySelector('#cancelPTConflicts')?.addEventListener('click',()=>{openModal(`<h3>Toplu iptal</h3><p>PT izniyle çakışan ${ptConflicts.length} seans iptal edilecek. Paketlerden seans düşülmeyecek.</p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="confirmBulkCancel">İptalleri Kaydet</button></div>`);modal.querySelector('#confirmBulkCancel').onclick=()=>{ptConflicts.forEach(e=>cancelLeaveSession(e));save();closeModal();render();};});
 }
 
