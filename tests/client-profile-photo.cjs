@@ -1,0 +1,22 @@
+const fs=require('fs'),assert=require('assert/strict');
+const {JSDOM}=require(process.env.PITI_JSDOM_PATH||'jsdom');
+const source=fs.readFileSync('index.html','utf8');
+const fn=source.slice(source.indexOf('async function refreshCustomerProfilePhoto('),source.indexOf('function customerProfile(){'));
+const dom=new JSDOM('<div id="customerPhotoPreview"></div><div id="customerPhotoStatus"></div>');
+let authUser={id:'pt-a'},demoMode=false,state={role:'pt'},calls=[],rows=[],failure=false,guardFailure=false;
+const db={rpc:async(name,args)=>{calls.push({name,args});return {data:rows,error:failure?Error('network'):null}}};
+const document=dom.window.document,navigator={onLine:true};
+const escapeHtml=s=>String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+const liveContextGuard=()=>()=>{if(guardFailure)throw Error('changed account')};
+eval(fn+';global.refreshPhoto=refreshCustomerProfilePhoto;');
+(async()=>{try{
+ const c={id:'c-a',dbId:'c-a',userId:'member-a',photo:'old'};
+ rows=[{client_id:'other',photo:'wrong'},{client_id:'c-a',photo:'https://example.invalid/new.jpg'}];
+ await refreshPhoto(c);assert.equal(c.photo,rows[1].photo);assert.equal(document.querySelector('img').src,c.photo);assert.deepEqual(calls[0],{name:'get_my_client_photos',args:{p_client_id:'c-a'}});
+ rows=[];await refreshPhoto(c);assert.equal(c.photo,'');assert.equal(document.querySelector('img'),null);
+ const n=calls.length;c.relationshipEndedAt='2026-09-01';await refreshPhoto(c);assert.equal(calls.length,n);
+ delete c.relationshipEndedAt;demoMode=true;await refreshPhoto(c);assert.equal(calls.length,n);demoMode=false;
+ c.photo='unchanged';rows=[{client_id:'c-a',photo:'new'}];guardFailure=true;await refreshPhoto(c);assert.equal(c.photo,'unchanged');guardFailure=false;
+ failure=true;await refreshPhoto(c);assert.ok(document.querySelector('#customerPhotoStatus').textContent.includes('güncellenemedi'));
+ console.log('PASS: linked customer photo, missing photo clearing, ended relationship and demo guards, account switch, error handling');
+ }finally{dom.window.close()}})().catch(e=>{console.error(e);process.exitCode=1});
