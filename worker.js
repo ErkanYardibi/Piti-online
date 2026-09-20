@@ -1,6 +1,28 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Fixed DEMO destination; authorization remains in the DEMO function.
+    if (url.pathname === '/api/demo-admin') {
+      const json = (status, error) => new Response(JSON.stringify({error}), {status, headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+      if (request.method !== 'POST') return json(405, 'POST gerekli.');
+      const origin = request.headers.get('origin');
+      if (origin && origin !== url.origin) return json(403, 'İzin verilmeyen adres.');
+      const authorization = request.headers.get('authorization');
+      if (!authorization?.startsWith('Bearer ')) return json(401, 'Admin girişi gerekli.');
+      if (Number(request.headers.get('content-length') || 0) > 2100000) return json(413, 'Demo verisi çok büyük.');
+      try {
+        const body = await request.text();
+        if (new TextEncoder().encode(body).length > 2100000) return json(413, 'Demo verisi çok büyük.');
+        const parsed = JSON.parse(body);
+        if (!['demo','demo_versions','save_demo','restore_demo'].includes(parsed.action)) return json(400, 'Geçersiz demo işlemi.');
+        const upstream = await fetch('https://ldufxzwgwbaogpmwqhlw.supabase.co/functions/v1/demo-admin', {
+          method:'POST', headers:{'Authorization':authorization,'Content-Type':'application/json','Origin':url.origin}, body, signal:AbortSignal.timeout(35000), redirect:'error'
+        });
+        const text = await upstream.text();
+        try { JSON.parse(text); } catch { return json(502, 'DEMO servisi şu anda yanıt veremiyor. Tekrar deneyin.'); }
+        return new Response(text,{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+      } catch { return json(502, 'DEMO servisine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.'); }
+    }
     const response = await env.ASSETS.fetch(request);
 
     if (request.method !== 'GET' || (url.pathname !== '/' && url.pathname !== '/index.html')) {

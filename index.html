@@ -454,6 +454,30 @@ async function managedAccountRequest(body){
  const data=await response.json();if(!response.ok)throw Error(data.error||'İşlem tamamlanamadı.');return data;
 }
 async function checkAccountAccess(){const {data,error}=await db.rpc('account_context');if(error)throw error;if(!data?.session_valid)throw Error('Oturumun sona erdi. Yeniden giriş yap.');if(!['pt','member'].includes(data.role))throw Error('Hesap rolü bulunamadı.');accountAccess=data;return data}
+function renderSelfPasswordSettings(target){
+ if(!target){if(adminMode||state.page!=='profile')return;target=view}
+ if(target.querySelector('#selfPasswordForm'))return;
+ const section=document.createElement('section');section.className='card';section.style.marginTop='18px';
+ section.innerHTML=`<h2 class="sectionTitle">Şifremi değiştir</h2>${demoMode?'<p class="muted">DEMO hesabının ortak giriş şifresi değiştirilemez.</p>':`<form id="selfPasswordForm" style="max-width:440px"><div class="field"><label for="selfNewPassword">Yeni şifre</label><input class="input" id="selfNewPassword" type="password" autocomplete="new-password" minlength="6" required></div><div class="field"><label for="selfRepeatPassword">Yeni şifre tekrar</label><input class="input" id="selfRepeatPassword" type="password" autocomplete="new-password" minlength="6" required></div><p class="small muted">En az 6 karakter kullan.</p><p id="selfPasswordStatus" role="status" aria-live="polite"></p><button type="submit" class="btn primary">Şifremi değiştir</button></form>`}`;
+ target.append(section);const form=section.querySelector('form');if(!form)return;
+ let busy=false;
+ form.onsubmit=async event=>{
+  event.preventDefault();if(busy)return;const status=form.querySelector('#selfPasswordStatus'),button=form.querySelector('button');
+  const password=form.querySelector('#selfNewPassword').value,repeat=form.querySelector('#selfRepeatPassword').value;
+  if(navigator.onLine===false){status.textContent='Bağlantı yok. Şifre değiştirilemedi.';return}
+  if(!authUser||demoMode){status.textContent='Şifreni değiştirmek için kendi hesabına giriş yap.';return}
+  if(password.length<6){status.textContent='En az 6 karakter kullan.';return}
+  if(password!==repeat){status.textContent='Şifreler aynı olmalı.';return}
+  const owner=authUser.id;busy=true;button.disabled=true;status.textContent='Şifren değiştiriliyor…';
+  try{
+   const {data,error}=await db.auth.updateUser({password});if(error)throw error;
+   if(authUser?.id!==owner)return;
+   if(!data?.user||data.user.id!==owner)throw Error('Hesap doğrulanamadı. Yeniden giriş yap.');
+   form.reset();status.textContent='Şifren değiştirildi. Bir sonraki girişinde yeni şifreni kullan.';
+  }catch(error){if(authUser?.id===owner)status.textContent=error.message||'Şifre değiştirilemedi. Tekrar dene.'}
+  finally{busy=false;button.disabled=false}
+ };
+}
 function showPasswordGate(){
  closeModal();document.querySelector('#authBack').hidden=true;view.innerHTML='';sidebar.innerHTML='';
  let gate=document.getElementById('passwordGate');if(gate)return;if(!gate){gate=document.createElement('div');gate.id='passwordGate';gate.className='authBack';gate.style.zIndex='3000';document.body.append(gate)}
@@ -722,7 +746,7 @@ async function adminRpc(action,args={}){
  if(['demo','demo_versions','save_demo','restore_demo'].includes(action)){
   const {data:sessionData,error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
   const token=sessionData.session?.access_token;if(!token)throw Error('Admin oturumu gerekli.');
-  const response=await fetch(DEMO_URL+'/functions/v1/demo-admin',{method:'POST',headers:{apikey:DEMO_KEY,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,args})});
+  let response;try{response=await fetch('/api/demo-admin',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action,args})})}catch{throw Error('DEMO yönetimine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.')}
   const result=await response.json();if(!response.ok)throw Error(result.error||'Demo işlemi başarısız.');return result.data;
  }
  const {data,error}=await db.rpc('admin_console',{p_action:action,p_args:args});if(error)throw error;return data;
@@ -770,20 +794,20 @@ function adminDashboardHtml(data){return `<section class="card"><div class="tool
 async function renderAdmin(){
  renderTestLauncher();
  const request=++adminRenderSequence;
- const tabs={dashboard:'Genel Bakış',users:'Kullanıcılar',trainers:'PT’ler',members:'Müşteri Hesapları',links:'PT–Müşteri Bağlantıları',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'DEMO Yönetimi',recovery:'Yedekleme',settings:'Ayarlar'};
- const icons={dashboard:'home',users:'users',trainers:'trainer',members:'user',links:'users',sessions:'calendar',audit:'progress',logins:'calendar',demo_versions:'spark',recovery:'wallet',settings:'user'};
+ const tabs={dashboard:'Genel Bakış',users:'Kullanıcılar',trainers:'PT’ler',members:'Müşteri Hesapları',links:'PT–Müşteri Bağlantıları',sessions:'Oturumlar',audit:'İşlem Geçmişi',logins:'Giriş Geçmişi',demo_versions:'DEMO Yönetimi',recovery:'Yedekleme',settings:'Ayarlar',profile:'Profilim'};
+ const icons={dashboard:'home',users:'users',trainers:'trainer',members:'user',links:'users',sessions:'calendar',audit:'progress',logins:'calendar',demo_versions:'spark',recovery:'wallet',settings:'user',profile:'user'};
  sidebar.innerHTML=Object.entries(tabs).map(([k,v])=>`<button class="navBtn ${adminTab===k?'active':''}" data-admin-tab="${k}" aria-label="${v}" ${adminTab===k?'aria-current="page"':''}><span class="navIcon">${navIcon(icons[k])}</span><span class="navText">${v}</span></button>`).join('');
  sidebar.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;adminPage=0;adminSearch='';renderAdmin()});
  view.innerHTML='<div class="toolbar"><div><h1>'+tabs[adminTab]+'</h1><p class="muted">myPiti yönetim paneli</p></div><span class="status green">ADMIN</span></div><p role="status">Yükleniyor…</p>';
  try{
   const summary=await adminRpc('overview');
-  const rows=await adminRpc(adminTab,{page:adminPage,search:adminSearch});
+  const rows=adminTab==='profile'?{}:await adminRpc(adminTab,{page:adminPage,search:adminSearch});
   if(request!==adminRenderSequence||!adminMode)return;
   view.innerHTML=`<div class="toolbar"><div><h1>${tabs[adminTab]}</h1><div class="muted">myPiti yönetim paneli</div></div><span class="status green">ADMIN · Çift doğrulama</span></div>${adminSummaryCards(summary)}<div id="adminContent" class="${adminTab==='dashboard'?'adminOverview':'card adminTableCard'}"></div><div id="adminPagination" class="rightActions" style="margin-top:16px"><button class="btn ghost" id="adminPrev" ${adminPage===0?'disabled':''} ${!Array.isArray(rows)?'hidden':''}>Önceki</button><span ${!Array.isArray(rows)?'hidden':''}>${adminPage+1}. sayfa</span><button class="btn ghost" id="adminNext" ${!Array.isArray(rows)||rows.length<50?'disabled':''} ${!Array.isArray(rows)?'hidden':''}>Sonraki</button><button class="btn ghost" id="adminRefresh">Yenile</button></div><p id="adminError" role="alert"></p>`;
   const c=view.querySelector('#adminContent');
   const table=(headers,items)=>'<table class="table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+items.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
   const e=escapeHtml;
-  if(adminTab==='dashboard'){
+  if(adminTab==='profile'){c.innerHTML='<h2 class="sectionTitle">Hesap Güvenliği</h2><p class="muted">Kendi ADMIN hesabının şifresini buradan değiştirebilirsin.</p>';renderSelfPasswordSettings(c);}else if(adminTab==='dashboard'){
    c.innerHTML=adminDashboardHtml(rows||{});
    c.querySelectorAll('[data-admin-open]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminOpen;adminPage=0;adminSearch='';renderAdmin()});
    adminRpc('recovery').then(r=>{if(request!==adminRenderSequence||!adminMode)return;const box=c.querySelector('#adminBackupSummary');if(box)box.textContent=r.stale?'Güncel doğrulanmış kopya yok. Kontrol gerekli.':'Doğrulanmış geri dönüş kopyası mevcut.'}).catch(()=>{if(request===adminRenderSequence){const box=c.querySelector('#adminBackupSummary');if(box)box.textContent='Yedekleme durumu alınamadı.'}});
@@ -897,7 +921,7 @@ function setRole(role){if(authUser&&!demoMode)return toast('Hesap türün kayıt
 function nav(page){if(demoMode&&state.role==='pt'&&state.testPrimaryId&&String(state.customer.id)!==String(state.testPrimaryId)&&page!=='messages')return switchTestUser(state.testPrimaryId,'pt',page);state.page=page;save();render()}
 function renderNav(){const items=state.role==='pt'?navPT:navM; sidebar.innerHTML=items.map(([p,i,t])=>`<button class="navBtn ${state.page===p?'active':''}" data-nav="${p}"><span class="navIcon">${navIcon(i)}</span><span class="navText">${t}${p==='messages'&&((state.unread||{})[state.role]||0)?' <span class=\"badge\">'+state.unread[state.role]+'</span>':''}</span></button>`).join('');sidebar.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));}
 function render(){if(adminMode)return;if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
- const map={dashboard:dashboard,customers:customers,customerProfile:customerProfile,invites:invites,calendar:calendar,finance:finance,messages:messages,today:memberToday,progress:progress,trainer:trainer,profile:state.role==='pt'?ptProfile:memberProfile}; (map[state.page]||dashboard)();renderResultApprovals();renderTestLauncher();renderLeavePanel();renderClientInviteControls();renderUsernameSettings();if(typeof renderTransferControls==='function')renderTransferControls();if(authUser||demoMode){const h=Array.from(view.querySelectorAll('h2')).find(h=>h.textContent==='Bugünkü Görevler');if(h)h.parentElement.id='liveMemberTasks';updateLiveTaskWidgets();} }
+ const map={dashboard:dashboard,customers:customers,customerProfile:customerProfile,invites:invites,calendar:calendar,finance:finance,messages:messages,today:memberToday,progress:progress,trainer:trainer,profile:state.role==='pt'?ptProfile:memberProfile}; (map[state.page]||dashboard)();renderResultApprovals();renderTestLauncher();renderLeavePanel();renderClientInviteControls();renderUsernameSettings();renderSelfPasswordSettings();if(typeof renderTransferControls==='function')renderTransferControls();if(authUser||demoMode){const h=Array.from(view.querySelectorAll('h2')).find(h=>h.textContent==='Bugünkü Görevler');if(h)h.parentElement.id='liveMemberTasks';updateLiveTaskWidgets();} }
 function metricIcon(label){return ({'PT Seansı':'◷','Randevu Talebi':'✓','Geciken Görev':'⚠','Ödeme / Paket':'₺','Başlangıç Kilo':'⚖','Güncel Kilo':'↗','Değişim':'↘','Bel Ölçüsü':'⌁'})[label]||'✦'}
 const muscleOptions=[['Göğüs','chest'],['Sırt','back'],['Bacak','legs'],['Omuz','shoulders'],['Kol','arms'],['Karın','abs']];
 function muscleImage(key){return `<i class="muscleImage muscle-${key}" aria-hidden="true"></i>`}
@@ -1805,7 +1829,7 @@ function openAddLocation(){openModal(`<h3>Salon / Lokasyon Ekle</h3><div class="
 function openModal(html){modal.innerHTML=html;modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){modalBack.classList.remove('show')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
 function toast(t){const el=document.querySelector('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 function escapeHtml(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-document.querySelector('#avatar').onclick=()=>nav('profile');
+document.querySelector('#avatar').onclick=()=>{if(adminMode){adminTab='profile';adminPage=0;renderAdmin()}else nav('profile')};
 document.querySelectorAll('#roleSeg button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));document.querySelector('#resetBtn').onclick=()=>{state=cleanDemoState(state);save();toast('Demo temizlendi.');render()};
 setInterval(()=>{if(['dashboard','today','calendar'].includes(state.page)&&!modalBack.classList.contains('show'))render();},60000);
 // BEGIN trainer transfer module
