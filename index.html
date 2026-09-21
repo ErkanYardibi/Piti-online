@@ -315,10 +315,10 @@ async function loadDemoData(){
  for(const request of state.invite.pending||[])request.created=request.created||iso(today);
  demoMode=true;authUser=null;localStorage.removeItem('pitiDemoV4');render();
 }
-const clientHistoryKeys=['package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'];
+const clientHistoryKeys=['package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer','sessionBilling'];
 let cloudHistoryVersions={},cloudHistoryOriginal={},clientInvitations=[],inviteOperation=false;
 function profileInitials(name){return (name||'?').trim().split(/\s+/).filter(Boolean).map(n=>n[0]).filter((_,i,a)=>i===0||i===a.length-1).join('').toLocaleUpperCase('tr-TR')}
-function emptyClientHistory(){return {package:null,payment:{status:'unpaid',amount:0,method:'EFT/Havale',receipt:'',submitted:false},financeHistory:[],messages:[],tasks:[],progressData:[],unread:{pt:0,member:0},memberTrainer:{name:'Henüz PT bağlantısı yok',code:'',status:'unlinked'}}}
+function emptyClientHistory(){return {sessionBilling:{charges:[],receipts:[]},package:null,payment:{status:'unpaid',amount:0,method:'EFT/Havale',receipt:'',submitted:false},financeHistory:[],messages:[],tasks:[],progressData:[],unread:{pt:0,member:0},memberTrainer:{name:'Henüz PT bağlantısı yok',code:'',status:'unlinked'}}}
 function clientAccount(c){return String(c.id)===String(state.customer.id)?state:(state.customerAccounts[c.id]||(state.customerAccounts[c.id]=Object.assign(emptyClientHistory(),{customer:c})))}
 function clientHistoryPayload(c){
  const a=clientAccount(c),out={};for(const k of clientHistoryKeys)out[k]=clone(a[k]??emptyClientHistory()[k]);
@@ -911,10 +911,10 @@ async function initAuth(){
  catch(error){authMessage('Oturum kontrol edilemedi: '+error.message)}
 }
 function packageEnd(pkg){return pkg?.expireDate||pkg?.end||''}
-function packageEndLabel(pkg=state.package){const end=packageEnd(pkg);return end?new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric'}).format(new Date(end+'T12:00:00')):'—'}
-function daysLeft(pkg=state.package){const end=packageEnd(pkg);if(!end)return 0; const e=new Date(end+'T00:00:00'); const t=new Date();t.setHours(0,0,0,0); return Math.max(0,Math.ceil((e-t)/86400000)); }
-function sessionsLeft(pkg=state.package){if(!pkg)return 0;return Math.max(0,pkg.totalSessions-pkg.usedSessions)}
-function packageEnded(){return daysLeft()<=0 || sessionsLeft()<=0}
+function packageEndLabel(pkg=state.package){if(pkg?.billingType==='per_session')return pkg.status==='active'?'PT sonlandırana kadar':'Sonlandırıldı';const end=packageEnd(pkg);return end?new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long',year:'numeric'}).format(new Date(end+'T12:00:00')):'—'}
+function daysLeft(pkg=state.package){if(pkg?.billingType==='per_session')return '—';const end=packageEnd(pkg);if(!end)return 0; const e=new Date(end+'T00:00:00'); const t=new Date();t.setHours(0,0,0,0); return Math.max(0,Math.ceil((e-t)/86400000)); }
+function sessionsLeft(pkg=state.package){if(!pkg)return 0;if(pkg.billingType==='per_session')return '—';return Math.max(0,pkg.totalSessions-pkg.usedSessions)}
+function packageEnded(){if(state.package?.billingType==='per_session')return state.package.status!=='active';return daysLeft()<=0 || sessionsLeft()<=0}
 function sessionPackageWarning(e){
  if(!e||e.type!=='session'||!['planned','requested'].includes(e.status))return '';
  const customer=eventClient(e);if(!customer)return '';
@@ -925,6 +925,7 @@ function sessionPackageWarning(e){
  if(!pkg)reason=pt?'Bu öğrencinin aktif paketi yok.':'Aktif paketiniz bulunmuyor.';
  else if(pkg.status&&pkg.status!=='active')reason=pt?'Bu öğrencinin paketi aktif değil.':'Paketiniz aktif değil.';
  else if(pkg.start&&date<pkg.start)reason='Paket bu seans tarihinde henüz başlamamış olacak.';
+ else if(pkg.billingType==='per_session')return '';
  else {
   const reasons=[],end=packageEnd(pkg);
   if(pkg.rule!=='Sadece süre bitince'&&Number.isFinite(Number(pkg.totalSessions))&&Number(pkg.totalSessions)-Number(pkg.usedSessions||0)<=0)reasons.push('Seans hakkı tükendi.');
@@ -1530,19 +1531,94 @@ function openAvailability(date=state.selectedDate){
  state.events.push(...entries);state.selectedDate=start;state.calCursor=new Date(start.slice(0,7)+'-01T12:00:00').toISOString();state.page='calendar';save();closeModal();toast(entries.length===1?'Takvim kaydı eklendi.':entries.length+' gün takvime eklendi.');render();
  };
 }
-function finance(){if(state.role==='pt'){const list=visibleCustomers();if(!list.length){view.innerHTML='<h1>Ödemeler & Paketler</h1>'+archiveViewToggle()+'<div class="empty">Gösterilecek müşteri yok.</div>';return}if(!list.some(c=>String(c.id)===String(state.financeCustomerId||state.customer.id)))state.financeCustomerId=list[0].id}const account=financeAccount();const picker=financePicker();if(!account.package){view.innerHTML=`<div class="toolbar"><h1>Ödemeler & Paketler</h1></div>${picker}<div class="card"><h2>${escapeHtml(account.customer.name)}</h2><p>Bu müşteri için henüz paket tanımlanmadı.</p><button class="btn primary" id="newPackage">Paket Tanımla</button></div>`;bindFinancePicker();document.querySelector('#newPackage').hidden=state.role!=='pt';document.querySelector('#newPackage').onclick=openPackage;return;}const pay=account.payment; const progressPct=Math.round(account.package.usedSessions/account.package.totalSessions*100); view.innerHTML=`<div class="toolbar"><div><h1>${state.role==='pt'?'Ödemeler & Paketler':'Paketim & Ödemelerim'}</h1><div class="muted">Seans, süre, ödeme ve No Show takibi.</div></div>${state.role==='pt'?'<button class="btn primary" id="newPackage">Paket Düzenle</button>':''}</div>
+function finance(){if(state.role==='pt'){const list=visibleCustomers();if(!list.length){view.innerHTML='<h1>Ödemeler & Paketler</h1>'+archiveViewToggle()+'<div class="empty">Gösterilecek müşteri yok.</div>';return}if(!list.some(c=>String(c.id)===String(state.financeCustomerId||state.customer.id)))state.financeCustomerId=list[0].id}const account=financeAccount();const picker=financePicker();if(account.package?.billingType==='per_session')return perSessionFinance(account,picker);if(!account.package){view.innerHTML=`<div class="toolbar"><h1>Ödemeler & Paketler</h1></div>${picker}<div class="card"><h2>${escapeHtml(account.customer.name)}</h2><p>Bu müşteri için henüz paket tanımlanmadı.</p><button class="btn primary" id="newPackage">Paket Tanımla</button></div>`;bindFinancePicker();document.querySelector('#newPackage').hidden=state.role!=='pt';document.querySelector('#newPackage').onclick=openPackage;return;}const pay=account.payment; const progressPct=Math.round(account.package.usedSessions/account.package.totalSessions*100); view.innerHTML=`<div class="toolbar"><div><h1>${state.role==='pt'?'Ödemeler & Paketler':'Paketim & Ödemelerim'}</h1><div class="muted">Seans, süre, ödeme ve No Show takibi.</div></div>${state.role==='pt'?'<button class="btn primary" id="newPackage">Paket Düzenle</button>':''}</div>
 ${picker}<div class="grid2"><div><div class="packageHero"><div class="packageTop"><div><div class="small" style="opacity:.85">${account.customer.name}</div><div style="font-size:23px;font-weight:900">${account.package.name}</div><div class="small" style="margin-top:4px;opacity:.9">${account.package.rule}</div></div><div style="text-align:right"><div class="big">${sessionsLeft(account.package)}</div><div class="small">seans kaldı</div></div></div><div class="packageStats"><div class="packageStat"><b>${daysLeft(account.package)}</b><span>Gün kaldı</span></div><div class="packageStat"><b>${account.package.usedSessions}</b><span>Kullanılan</span></div><div class="packageStat"><b>${money(account.package.price)}</b><span>Paket tutarı</span></div></div><div style="margin-top:14px"><div class="small" style="margin-bottom:6px">Seans kullanımı</div><div class="progress"><span style="width:${progressPct}%"></span></div></div><div class="small" style="margin-top:12px;opacity:.9">Son gün: ${packageEndLabel(account.package)}</div></div>
 <div class="card" style="margin-top:16px"><h2 class="sectionTitle">Hareket Geçmişi</h2><div class="history">${account.financeHistory.slice().reverse().map(h=>`<div class="hist"><div><b>${h.text}</b><div class="small muted">${h.detail}</div></div><div class="small muted">${formatShort(h.date)}</div></div>`).join('')}</div></div></div>
 <div><div class="card"><h2 class="sectionTitle">Ödeme Durumu</h2>${paymentStatusHtml(pay)}<div style="margin-top:14px"><div class="subTitle">${money(pay.amount)}</div><div class="small muted">${pay.method}</div></div>${pay.receipt?`<div class="uploadBox" style="margin-top:14px">📎 <b>${pay.receipt}</b><div class="receiptName">Müşteri tarafından iletilen dekont</div></div>`:''}
 <div class="rightActions" style="margin-top:14px">${state.role==='pt'&&pay.status==='pending'?'<button class="btn primary" id="approvePay">Onayla</button><button class="btn red" id="rejectPay">Reddet</button>':''}${state.role==='member'&&pay.status!=='approved'?'<button class="btn primary" id="paidBtn">Ödedim / Dekont Gönder</button>':''}</div></div>
 <div class="card" style="margin-top:16px"><h2 class="sectionTitle">Kurallar</h2><div class="hist"><div><b>Paket bitişi</b><div class="small muted">${account.package.durationDays||Math.round((new Date(account.package.end)-new Date(account.package.start))/86400000)} gün veya ${account.package.totalSessions} seans</div></div><span class="status blue">Hangisi önce</span></div><div class="hist"><div><b>No Show</b><div class="small muted">Mazerete göre seanstan düşebilir</div></div><span class="status amber">PT karar verir</span></div></div></div></div>`;
- bindFinancePicker();if(document.querySelector('#approvePay'))document.querySelector('#approvePay').onclick=approvePayment;if(document.querySelector('#rejectPay'))document.querySelector('#rejectPay').onclick=rejectPayment;if(document.querySelector('#paidBtn'))document.querySelector('#paidBtn').onclick=openReceipt;if(document.querySelector('#newPackage'))document.querySelector('#newPackage').onclick=openPackage;}
+ renderBillingLedger(account);bindFinancePicker();if(document.querySelector('#approvePay'))document.querySelector('#approvePay').onclick=approvePayment;if(document.querySelector('#rejectPay'))document.querySelector('#rejectPay').onclick=rejectPayment;if(document.querySelector('#paidBtn'))document.querySelector('#paidBtn').onclick=openReceipt;if(document.querySelector('#newPackage'))document.querySelector('#newPackage').onclick=openPackage;}
 function formatShort(s){return new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'short'}).format(new Date(s+'T12:00:00'))}
-function approvePayment(){const account=state.page==='finance'?financeAccount():state;account.payment.status='approved';account.financeHistory.push({date:iso(today),text:'Ödeme onaylandı',detail:`${money(account.payment.amount)} · ${account.payment.method}`});save();toast('Ödeme onaylandı.');render()}
+function approvePayment(){if(state.role!=='pt')return;const account=state.page==='finance'?financeAccount():state;openPTReceipt(account,account.payment?.chargeId||null);}
 function rejectPayment(){const account=state.page==='finance'?financeAccount():state;account.payment.status='rejected';account.financeHistory.push({date:iso(today),text:'Ödeme reddedildi',detail:'Dekont/ödeme kontrolü gerekli'});save();toast('Ödeme reddedildi.');render()}
-function openReceipt(){openModal(`<h3>Ödeme bildirimi</h3><div class="field"><label>Ödenen tutar</label><input class="input" type="number" id="rAmount" value="${state.package.price}"></div><div class="field"><label>Ödeme yöntemi</label><select id="rMethod"><option>EFT/Havale</option><option>Nakit</option><option>Diğer</option></select></div><div class="uploadBox"><div>📎 Dekont seç</div><input type="file" id="rFile" accept="image/*,.pdf" style="margin-top:10px"></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendReceipt">PT'ye Gönder</button></div>`);modal.querySelector('#sendReceipt').onclick=()=>{const f=modal.querySelector('#rFile').files[0];state.payment={status:'pending',amount:+modal.querySelector('#rAmount').value,method:modal.querySelector('#rMethod').value,receipt:f?f.name:'Dekont eklenmedi',submitted:true,submittedAt:iso(today)};state.financeHistory.push({date:iso(today),text:'Ödeme bildirimi gönderildi',detail:state.payment.receipt});save();closeModal();toast('Ödeme bildirimi PT’ye gönderildi.');finance()}}
+function openReceipt(){openModal(`<h3>Ödeme bildirimi</h3><div class="field"><label>Ödenen tutar</label><input class="input" type="number" id="rAmount" value="${state.package.price}"></div><div class="field"><label>Ödeme yöntemi</label><select id="rMethod"><option>EFT/Havale</option><option>Nakit</option><option>Diğer</option></select></div><div class="uploadBox"><div>📎 Dekont seç</div><input type="file" id="rFile" accept="image/*,.pdf" style="margin-top:10px"></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendReceipt">PT'ye Gönder</button></div>`);modal.querySelector('#sendReceipt').onclick=()=>{const f=modal.querySelector('#rFile').files[0];state.payment={...state.payment,status:'pending',amount:+modal.querySelector('#rAmount').value,method:modal.querySelector('#rMethod').value,receipt:f?f.name:'Dekont eklenmedi',submitted:true,submittedAt:iso(today)};state.financeHistory.push({date:iso(today),text:'Ödeme bildirimi gönderildi',detail:state.payment.receipt});save();closeModal();toast('Ödeme bildirimi PT’ye gönderildi.');finance()}}
 function customerPackageRow(c){const a=(state.customerAccounts||{})[c.id],p=a?.package;return `<tr><td><b>${escapeHtml(c.name)}</b><div class="small muted">Demo müşteri</div></td><td>${p?escapeHtml(p.name):'<span class="status gray">Paket tanımsız</span>'}</td><td>${p?`${sessionsLeft(p)} seans / ${daysLeft(p)} gün`:'—'}</td><td>${p?paymentStatusHtml(a.payment):'<span class="status gray">Kayıt yok</span>'}</td><td>${escapeHtml(c.session.time)} · ${escapeHtml(c.session.title)}</td><td><button class="btn sm primary" data-customer-package="${escapeHtml(c.id)}">Paket</button></td></tr>`;}
 function financeCustomers(){const list=[state.customer,...(state.manualCustomers||[]),...(state.demoCustomers||[]),...(state.invite.approved||[])];return authUser&&!demoMode?list.filter(c=>c.cloudManaged):list;}
+function billingLedger(a){return a.sessionBilling||(a.sessionBilling={charges:[],receipts:[]});}
+function chargePaid(a,id){return (a.sessionBilling?.receipts||[]).filter(r=>r.chargeId===id).reduce((sum,r)=>sum+Number(r.amount||0),0);}
+function chargeDue(a,c){return c.voided?0:Math.max(0,Math.round((Number(c.amount)-chargePaid(a,c.id))*100)/100);}
+function fixedBillingKey(a){return a.package?.billingKey||['fixed',a.package?.start,a.package?.name].join(':');}
+function fixedPaymentDue(a){const paid=a.sessionBilling?.fixedPaid?.[fixedBillingKey(a)]??Number(a.payment?.receivedAmount||(a.payment?.status==='approved'?a.package?.price:0)||0);return Math.max(0,Math.round((Number(a.package?.price||0)-paid)*100)/100);}
+function preservePreviousPackageDebt(a){
+ if(!a.package||a.package.billingType==='per_session')return;
+ const due=fixedPaymentDue(a),ledger=billingLedger(a);
+ if(due>0){const charge={id:uuid(),sessionId:'package:'+uuid(),date:iso(new Date()),title:a.package.name+' · Devreden paket borcu',amount:due,createdAt:new Date().toISOString(),voided:false};ledger.charges.push(charge);if(a.payment?.status==='pending')a.payment={...a.payment,chargeId:charge.id};else a.payment={status:'unpaid',chargeId:charge.id,amount:due,method:'',submitted:false};}
+ else a.payment={status:'approved',amount:0,method:'',submitted:false};
+}
+function updateSessionCharge(a,e,status,count,previousStatus,manual=false){
+ if(state.role!=='pt'||e.type!=='session')return;
+ const ledger=billingLedger(a),id=String(e.dbId||e.id),old=ledger.charges.find(c=>c.sessionId===id);
+ if(old){old.voided=!(status==='completed'||status==='noshow'&&count);return;}
+ const p=a.package;
+ if(p?.billingType!=='per_session'||p.status!=='active'||(!p.autoCharge&&!manual)||(!manual&&previousStatus!=='planned')||e.date<p.start||!(status==='completed'||status==='noshow'&&count))return;
+ if(!demoMode&&!e.dbId)e.dbId=uuid();
+ ledger.charges.push({id:uuid(),sessionId:String(e.dbId||e.id),modelId:p.id,date:e.date,title:e.title,amount:Number(p.price),createdAt:new Date().toISOString(),voided:false});
+ (a.financeHistory||(a.financeHistory=[])).push({date:iso(new Date()),text:'Seans ücreti oluşturuldu',detail:e.date+' · '+money(p.price),eventId:e.id});
+}
+async function commitFinanceChange(a,change,member=false){
+ if(navigator.onLine===false)throw Error('Bağlantı yok. Değişiklik kaydedilmedi.');
+ if(state.role!==(member?'member':'pt'))throw Error('Bu işlem için yetkin yok.');
+ if(demoMode){change();save();return;}
+ const ensureCurrent=liveContextGuard();clearTimeout(cloudSyncTimer);
+ const job=cloudSyncChain.catch(()=>{}).then(async()=>{
+  ensureCurrent();const backup={};for(const k of ['package','payment','financeHistory','sessionBilling'])backup[k]=clone(a[k]??null);
+  const c=a.customer;if(!c?.dbId)throw Error('Müşteri kaydı doğrulanamadı.');
+  try{change();const payload=clientHistoryPayload(c);const {data,error}=await db.rpc('save_client_history',{p_client_id:c.dbId,p_data:payload,p_version:cloudHistoryVersions[c.dbId]||0});ensureCurrent();if(error)throw error;cloudHistoryVersions[c.dbId]=data;cloudHistoryOriginal[c.dbId]=clone(payload);}
+  catch(error){ensureCurrent();Object.assign(a,backup);throw error;}
+ });cloudSyncChain=job;await job;ensureCurrent();save();
+}
+function openPerSessionPackage(){
+ if(state.role!=='pt')return;const a=financeAccount(),p=a.package?.billingType==='per_session'?a.package:null;
+ openModal(`<h3>Ders başı ödeme</h3><p>${escapeHtml(a.customer.name)}</p><div class="field"><label>Seans ücreti (₺)</label><input id="psUnitPrice" class="input" type="number" min="0.01" step="0.01" value="${p?.price||''}"></div><label><input type="checkbox" id="psAutoCharge" ${p?.autoCharge?'checked':''}> Her tamamlanan seans için otomatik borç oluştur</label><p class="small muted">Ücretli No Show da dahil. Planlı ve ücretsiz demo seansları borç oluşturmaz. PT sonlandırana kadar devam eder. Ücret değişikliği eski borçları değiştirmez.</p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="savePerSession">Kaydet</button></div>`);
+ modal.querySelector('#savePerSession').onclick=async()=>{
+  const b=modal.querySelector('#savePerSession'),price=Number(modal.querySelector('#psUnitPrice').value),autoCharge=modal.querySelector('#psAutoCharge').checked;
+  if(b.disabled)return;if(!Number.isFinite(price)||price<=0||Math.abs(Math.round(price*100)-price*100)>0.00001)return toast('Geçerli bir seans ücreti gir (en fazla iki ondalık).');
+  b.disabled=true;try{await commitFinanceChange(a,()=>{if(a.package&&a.package!==p)(a.financeHistory||(a.financeHistory=[])).push({date:iso(new Date()),text:'Önceki paket',detail:a.package.name,packageSnapshot:clone(a.package),paymentSnapshot:clone(a.payment)});preservePreviousPackageDebt(a);a.package={...(p||{}),id:p?.status==='active'?p.id:uuid(),billingType:'per_session',name:'Ders başı ödeme',price,autoCharge,status:'active',start:p?.status==='active'?p.start:iso(new Date()),usedSessions:0,rule:'Ders başı',end:'',expireDate:''};billingLedger(a);a.financeHistory.push({date:iso(new Date()),text:'Ders başı ödeme tanımlandı',detail:money(price)+' / seans · Otomatik: '+(autoCharge?'Evet':'Hayır')});});closeModal();finance();toast('Ders başı ödeme kaydedildi.');}catch(e){toast(e.message);b.disabled=false;}
+ };
+}
+function stopPerSessionPackage(){
+ if(state.role!=='pt')return;const a=financeAccount();if(a.package?.billingType!=='per_session'||a.package.status!=='active')return;
+ openModal('<h3>Ders başı ödemeyi sonlandır</h3><p>Yeni seans borcu oluşmayacak. Mevcut borçlar ve ödemeler korunacak.</p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn red" id="confirmStopBilling">Sonlandır</button></div>');
+ modal.querySelector('#confirmStopBilling').onclick=async()=>{const b=modal.querySelector('#confirmStopBilling');if(b.disabled)return;b.disabled=true;try{await commitFinanceChange(a,()=>{a.package.status='closed';a.package.endedAt=new Date().toISOString();a.financeHistory.push({date:iso(new Date()),text:'Ders başı ödeme sonlandırıldı',detail:'Mevcut borçlar korundu.'});});closeModal();finance();}catch(e){toast(e.message);b.disabled=false;}};
+}
+function openPTReceipt(a=financeAccount(),chargeId=null){
+ if(state.role!=='pt')return;const c=chargeId?(a.sessionBilling?.charges||[]).find(c=>c.id===chargeId):null;
+ if(chargeId&&!c)return;const due=c?chargeDue(a,c):fixedPaymentDue(a);if(due<=0)return toast('Bu kayıt için ödenecek bakiye yok.');
+ openModal(`<h3>Ödeme aldım / Ödendi işaretle</h3><p>${escapeHtml(a.customer.name)}${c?' · '+escapeHtml(c.date):''}</p><div class="field"><label>Alınan tutar (₺)</label><input class="input" id="ptPaidAmount" type="number" step="0.01" min="0.01" max="${due}" value="${a.payment?.status==='pending'&&(!c||a.payment.chargeId===c.id)?Math.min(due,Number(a.payment.amount)||due):due}"></div><div class="field"><label>Ödeme tarihi</label><input class="input" id="ptPaidDate" type="date" max="${iso(new Date())}" value="${iso(new Date())}"></div><div class="field"><label>Yöntem</label><select id="ptPaidMethod"><option>Nakit</option><option>EFT/Havale</option><option>Kart</option><option>Diğer</option></select></div><p class="small muted">Kısmi ödeme girilirse kalan bakiye açık kalır.</p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="savePTReceipt">Ödemeyi Kaydet</button></div>`);
+ modal.querySelector('#savePTReceipt').onclick=async()=>{
+  const b=modal.querySelector('#savePTReceipt'),amount=Number(modal.querySelector('#ptPaidAmount').value),date=modal.querySelector('#ptPaidDate').value,method=modal.querySelector('#ptPaidMethod').value;
+  if(b.disabled)return;if(!Number.isFinite(amount)||Math.abs(Math.round(amount*100)-amount*100)>0.00001||amount<=0||amount>due||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>iso(new Date()))return toast('Tutar ve tarihi kontrol et.');
+  b.disabled=true;try{await commitFinanceChange(a,()=>{const remaining=c?chargeDue(a,c):fixedPaymentDue(a);if(amount>remaining)throw Error('Bakiye değişti. Yeniden kontrol et.');billingLedger(a).receipts.push({id:uuid(),chargeId:chargeId||null,amount:Math.round(amount*100)/100,date,method,recordedBy:'pt',recordedAt:new Date().toISOString()});if(!c){a.package.billingKey=fixedBillingKey(a);const ledger=billingLedger(a);ledger.fixedPaid=ledger.fixedPaid||{};ledger.fixedPaid[a.package.billingKey]=Number(a.package.price)-remaining+amount;a.payment={...a.payment,receivedAmount:Number(a.payment?.receivedAmount||0)+amount,status:amount>=remaining?'approved':'unpaid',method,paidAt:date,recordedBy:'pt'};}else if(a.payment?.chargeId===chargeId){a.payment={...a.payment,status:'approved',method,paidAt:date};}a.financeHistory.push({date,text:'PT ödeme aldı',detail:money(amount)+' · '+method+(c?' · '+c.date+' seansı':''),chargeId});});closeModal();finance();toast('Ödeme kaydedildi.');}catch(e){toast(e.message);b.disabled=false;}
+ };
+}
+function openSessionReceipt(a,id){
+ if(state.role!=='member')return;const c=a.sessionBilling?.charges.find(c=>c.id===id);if(!c||chargeDue(a,c)<=0)return;
+ if(a.payment?.status==='pending')return toast('Önceki ödeme bildirimin PT onayını bekliyor.');
+ openModal(`<h3>Seans ödemesi bildir</h3><p>${escapeHtml(c.date)} · ${money(chargeDue(a,c))}</p><div class="field"><label>Tutar</label><input class="input" id="sessionPaidAmount" type="number" min="0.01" step="0.01" value="${chargeDue(a,c)}"></div><div class="field"><label>Yöntem</label><select id="sessionPaidMethod"><option>EFT/Havale</option><option>Nakit</option><option>Kart</option><option>Diğer</option></select></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendSessionReceipt">PT’ye Bildir</button></div>`);
+ modal.querySelector('#sendSessionReceipt').onclick=async()=>{const b=modal.querySelector('#sendSessionReceipt'),amount=Number(modal.querySelector('#sessionPaidAmount').value),method=modal.querySelector('#sessionPaidMethod').value;if(b.disabled)return;if(!Number.isFinite(amount)||Math.abs(Math.round(amount*100)-amount*100)>0.00001||amount<=0||amount>chargeDue(a,c))return toast('Geçerli tutar gir.');b.disabled=true;try{await commitFinanceChange(a,()=>{a.payment={status:'pending',chargeId:id,amount,method,submitted:true,submittedAt:iso(new Date())};},true);closeModal();finance();toast('Ödeme bildirimin PT’ye gönderildi.');}catch(e){toast(e.message);b.disabled=false;}};
+}
+function perSessionFinance(a,picker){
+ const p=a.package;view.innerHTML=`<div class="toolbar"><h1>Ödemeler & Paketler</h1></div>${picker}<div class="card"><h2>Ders başı ödeme</h2><p>${money(p.price)} / seans · ${p.status==='active'?'Aktif':'Sonlandırıldı'}</p><p>Otomatik borç: ${p.autoCharge?'Açık':'Kapalı'}</p>${state.role==='pt'?`<div class="rightActions"><button class="btn ghost" id="editPerSession">${p.status==='active'?'Ücreti / Ayarları Düzenle':'Yeniden Başlat'}</button>${p.status==='active'?'<button class="btn red" id="stopPerSession">Sonlandır</button>':'<button class="btn ghost" id="switchFixedPackage">Sabit Paket Tanımla</button>'}</div>`:''}</div><div class="card" style="margin-top:16px"><h2>Hareket Geçmişi</h2>${(a.financeHistory||[]).slice().reverse().map(h=>`<div class="hist"><div>${escapeHtml(h.text)}<div class="small muted">${escapeHtml(h.detail||'')}</div></div><span>${escapeHtml(h.date)}</span></div>`).join('')}</div>`;
+ bindFinancePicker();view.querySelector('#editPerSession')?.addEventListener('click',openPerSessionPackage);view.querySelector('#stopPerSession')?.addEventListener('click',stopPerSessionPackage);view.querySelector('#switchFixedPackage')?.addEventListener('click',()=>openPackage(true));renderBillingLedger(a);
+}
+function renderBillingLedger(a){
+ const charges=a.sessionBilling?.charges||[],receipts=a.sessionBilling?.receipts||[];const panel=document.createElement('section');panel.className='card';panel.id='sessionBillingPanel';panel.style.marginTop='16px';
+ const total=charges.reduce((sum,c)=>sum+chargeDue(a,c),0);
+ panel.innerHTML=`<h2>Tahsilatlar ve Seans Borçları</h2>${a.package?.billingType!=='per_session'&&state.role==='pt'&&fixedPaymentDue(a)>0?'<button class="btn primary" id="manualPTPayment">Ödeme aldım / Ödendi işaretle</button>':''}${charges.length?`<p>Açık seans borcu: <b>${money(total)}</b></p>`:''}`+charges.slice().reverse().map(c=>`<div class="hist"><div><b>${escapeHtml(c.date)} · ${escapeHtml(c.title)}</b><div>${money(c.amount)} · ${c.voided?'Ücret iptal edildi'+(chargePaid(a,c.id)>0?' — tahsilat var; iade/mahsup kontrolü gerekli':''):chargeDue(a,c)>0?'Kalan: '+money(chargeDue(a,c)):'Ödendi'}</div></div>${!c.voided&&chargeDue(a,c)>0?`<button class="btn sm primary" data-charge-payment="${escapeHtml(c.id)}">${state.role==='pt'?'Ödeme aldım':'Ödedim'}</button>`:''}</div>`).join('')+receipts.slice().reverse().map(r=>`<div class="hist"><div><b>${money(r.amount)} · Tahsil edildi</b><div>${escapeHtml(r.method)} · PT kaydı</div></div><span>${escapeHtml(r.date)}</span></div>`).join('');
+ if(a.payment?.status==='pending'&&a.payment?.chargeId)panel.innerHTML+=`<div class="notice">Ödeme bildirimi: ${money(a.payment.amount)} · ${escapeHtml(a.payment.method)}${state.role==='pt'?'<button class="btn primary" id="approveSessionPayment">Ödemeyi Kontrol Et / Onayla</button><button class="btn ghost" id="rejectSessionPayment">Reddet</button>':' · PT onayı bekleniyor'}</div>`;
+ view.appendChild(panel);panel.querySelector('#manualPTPayment')?.addEventListener('click',()=>openPTReceipt(a));panel.querySelector('#approveSessionPayment')?.addEventListener('click',()=>openPTReceipt(a,a.payment.chargeId));panel.querySelector('#rejectSessionPayment')?.addEventListener('click',rejectPayment);
+ panel.querySelectorAll('[data-charge-payment]').forEach(b=>b.onclick=()=>state.role==='pt'?openPTReceipt(a,b.dataset.chargePayment):openSessionReceipt(a,b.dataset.chargePayment));
+}
 function financeAccount(){
  if(state.role!=='pt'||!state.financeCustomerId||String(state.financeCustomerId)===String(state.customer.id))return state;
  const customer=financeCustomers().find(c=>String(c.id)===String(state.financeCustomerId));if(!customer)return state;
@@ -1551,24 +1627,51 @@ function financeAccount(){
 }
 function financePicker(){return state.role==='pt'?`${archiveViewToggle()}<div class="field"><label for="financeCustomer">Müşteri</label><select id="financeCustomer">${visibleCustomers().map(c=>`<option value="${escapeHtml(String(c.id))}" ${String(c.id)===String(financeAccount().customer.id)?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>`:'';}
 function bindFinancePicker(){const el=document.querySelector('#financeCustomer');if(el)el.onchange=()=>{state.financeCustomerId=el.value;save();finance();};}
-function openPackage(){
- const account=financeAccount(),existing=account.package;
+function openPackage(forceFixed=false){
+ if(state.role!=='pt')return;
+ const account=financeAccount();if(account.package?.billingType==='per_session'&&forceFixed!==true)return openPerSessionPackage();
+ const existing=account.package?.billingType==='per_session'?null:account.package;
  const pkg=existing||{name:'12 Seans / 30 Gün',totalSessions:12,price:7500,start:iso(today),usedSessions:0,freezeDays:0,status:'active',rule:'Hangisi önce biterse',durationDays:30,expireDate:''};
  const duration=pkg.durationDays||Math.round((new Date(pkg.end)-new Date(pkg.start))/86400000)||30;
  openModal(`<h3>${escapeHtml(account.customer.name)} · ${existing?'Paket düzenle':'Paket tanımla'}</h3><div class="field"><label>Paket adı</label><input class="input" id="pName" value="${escapeHtml(pkg.name)}"></div><div class="grid2" style="grid-template-columns:1fr 1fr"><div class="field"><label>Seans sayısı</label><input class="input" type="number" min="1" step="1" id="pSess" value="${pkg.totalSessions}"></div><div class="field"><label>Süre (gün)</label><input class="input" type="number" min="1" step="1" id="pDays" value="${duration}"></div></div><div class="field"><label>Paket fiyatı</label><input class="input" type="number" min="0" id="pPrice" value="${pkg.price}"></div><div class="field"><label>Son kullanma tarihi (isteğe bağlı)</label><input class="input" type="date" id="pExpire" min="${pkg.start}" value="${pkg.expireDate||''}"><div class="small muted">Boş bırakırsan Süre (gün) bilgisi kullanılır.</div></div><div class="field"><label>Bitiş kuralı</label><select id="pRule">${['Hangisi önce biterse','Sadece seans bitince','Sadece süre bitince'].map(rule=>`<option ${rule===pkg.rule?'selected':''}>${rule}</option>`).join('')}</select></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="savePackage">Kaydet</button></div>`);
+ modal.querySelector('h3').insertAdjacentHTML('afterend','<div class="field"><label>Ödeme modeli</label><select id="packageBillingType"><option value="fixed">Sabit paket</option><option value="per_session">Ders başı ödeme</option></select></div>');
+ modal.querySelector('#packageBillingType').onchange=e=>{if(e.target.value==='per_session')openPerSessionPackage();};
  modal.querySelector('#savePackage').onclick=()=>{
  const name=modal.querySelector('#pName').value.trim(),days=+modal.querySelector('#pDays').value,sessions=+modal.querySelector('#pSess').value,price=+modal.querySelector('#pPrice').value,expire=modal.querySelector('#pExpire').value;
  if(!name||!Number.isInteger(days)||days<1||!Number.isInteger(sessions)||sessions<Math.max(1,pkg.usedSessions)||!Number.isFinite(price)||price<0||modal.querySelector('#pPrice').value==='')return toast('Geçerli paket adı, seans, süre ve fiyat gir. Kullanılan seans sayısının altına inilemez.');
  if(expire&&(!/^\d{4}-\d{2}-\d{2}$/.test(expire)||expire<pkg.start))return toast('Son kullanma tarihi başlangıç tarihinden önce olamaz.');
  const end=expire||iso(addDays(new Date(pkg.start+'T12:00:00'),days));
- account.package={...pkg,name,totalSessions:sessions,price,durationDays:days,expireDate:expire,rule:modal.querySelector('#pRule').value,end};
+ account.package={...pkg,billingKey:existing?.billingKey||uuid(),name,totalSessions:sessions,price,durationDays:days,expireDate:expire,rule:modal.querySelector('#pRule').value,end};
  if(!existing)account.payment={status:'unpaid',amount:price,method:'EFT/Havale',receipt:'',submitted:false};
  else if(account.payment.status==='unpaid')account.payment.amount=price;
  account.financeHistory.push({date:iso(today),text:existing?'Paket güncellendi':'Paket tanımlandı',detail:`${name} · ${sessions} seans / ${days} gün · ${money(price)}`});
  save();closeModal();toast('Paket kaydedildi.');finance();
  };
 }
+const billingResultsInFlight=new Set();
 function recordSessionResult(e,status,count,reason='',note='',groups){
+ const a=e&&(e.customerId==null||String(e.customerId)===String(state.customer.id)?state:state.customerAccounts?.[e.customerId]);
+ if(demoMode||!authUser||!(a?.package?.billingType==='per_session'||a?.sessionBilling?.charges?.some(c=>c.sessionId===String(e.dbId||e.id))))return recordSessionResultLocal(e,status,count,reason,note,groups);
+ return persistBillableSessionResult(a,e,status,count,reason,note,groups);
+}
+async function persistBillableSessionResult(a,e,status,count,reason,note,groups){
+ if(state.role!=='pt'||billingResultsInFlight.has(e))return false;
+ billingResultsInFlight.add(e);const ensureCurrent=liveContextGuard();clearTimeout(cloudSyncTimer);
+ const job=cloudSyncChain.catch(()=>{}).then(async()=>{
+  ensureCurrent();if(!e.dbId){await syncCloudDataNow();ensureCurrent();}
+  const c=a.customer;if(!c?.dbId||!e.dbId)throw Error('Seansın sunucu kaydı doğrulanamadı.');
+  const backupEvent=clone(e),backup={};for(const k of ['package','payment','financeHistory','sessionBilling'])backup[k]=clone(a[k]??null);
+  try{
+   if(!recordSessionResultLocal(e,status,count,reason,note,groups,false))return false;
+   const payload=clientHistoryPayload(c);
+   const {data,error}=await db.rpc('save_billable_session_result',{p_session_id:e.dbId,p_status:sessionStatusToDb(e.status),p_counts:e.counts,p_groups:e.muscleGroups||[],p_history:payload,p_version:cloudHistoryVersions[c.dbId]||0,p_expected_status:sessionStatusToDb(backupEvent.status)});
+   ensureCurrent();if(error)throw error;cloudHistoryVersions[c.dbId]=data;cloudHistoryOriginal[c.dbId]=clone(payload);return true;
+  }catch(error){ensureCurrent();Object.keys(e).forEach(k=>delete e[k]);Object.assign(e,backupEvent);Object.assign(a,backup);throw error;}
+ });cloudSyncChain=job;
+ try{const result=await job;ensureCurrent();if(result)save();return result;}catch(error){toast('Seans / ücret kaydedilemedi: '+error.message);return false;}finally{billingResultsInFlight.delete(e);}
+}
+function afterSessionResult(result,done){if(result&&typeof result.then==='function')return result.then(ok=>{if(ok)done();});if(result)done();}
+function recordSessionResultLocal(e,status,count,reason='',note='',groups,persist=true){
  if(navigator.onLine===false){toast('Bağlantı yok. Seans sonucu kaydedilemedi.');return false;}
  if(state.role!=='pt'||!e||e.type!=='session'||!['planned','completed','noshow'].includes(e.status)||!['completed','noshow'].includes(status))return false;
  if(!state.events.includes(e)){toast('Seans kaydı değişti. Yeniden açıp kontrol et.');return false;}
@@ -1579,12 +1682,13 @@ function recordSessionResult(e,status,count,reason='',note='',groups){
  const previous={status:e.status,counts:e.counts,reason:e.noShowReason||'',note:e.noShowNote||'',muscleGroups:[...(Array.isArray(e.muscleGroups)?e.muscleGroups:[])]};
  const nextGroups=Array.isArray(groups)?[...new Set(groups)]:previous.muscleGroups;
  const before=e.packageDebit??(account?.package&&(e.status==='completed'||e.status==='noshow'&&e.counts)?1:0);
- const after=count&&account?.package?1:0;
+ const after=count&&account?.package&&account.package.billingType!=='per_session'?1:0;
  if(previous.status===status&&!!previous.counts===count&&previous.reason===reason&&previous.note===note&&JSON.stringify(previous.muscleGroups)===JSON.stringify(nextGroups)){toast('Kaydedilecek değişiklik yok.');return false;}
  e.status=status;e.counts=count;e.muscleGroups=nextGroups;e.resolvedAt=new Date().toISOString();e.resolvedBy='pt';
  if(status==='noshow'){e.noShowReason=reason;e.noShowNote=note;}
  else{delete e.noShowReason;delete e.noShowNote;}
- if(account?.package)account.package.usedSessions=Math.max(0,account.package.usedSessions+after-before);
+ if(account?.package&&account.package.billingType!=='per_session')account.package.usedSessions=Math.max(0,account.package.usedSessions+after-before);
+ if(account)updateSessionCharge(account,e,status,count,previous.status);
  e.packageDebit=after;
  const hours=Number(state.ptProfile.confirmHours)||24;
  e.confirmation={status:'pending',createdAt:e.resolvedAt,deadline:new Date(Date.now()+hours*3600000).toISOString()};
@@ -1592,7 +1696,7 @@ function recordSessionResult(e,status,count,reason='',note='',groups){
  (e.resultHistory||(e.resultHistory=[])).push(audit);
  const label=s=>s==='completed'?'Tamamlandı':s==='noshow'?'No Show':'Planlı';
  if(account){account.financeHistory=account.financeHistory||[];account.financeHistory.push({date:iso(new Date()),text:'Seans sonucu güncellendi',detail:`${e.date} · ${e.title} · ${label(previous.status)} → ${label(status)} · ${count?'Seans sayıldı':'Seans sayılmadı'} · ${new Date(e.resolvedAt).toLocaleString('tr-TR')}`,eventId:e.id,...audit});}
- save();return true;
+ if(persist)save();return true;
 }
 function renderResultApprovals(){
  renderBookingApprovals();
@@ -1620,11 +1724,11 @@ function editSessionResult(id){
  const status=modal.querySelector('#resultStatus');status.value=e.status;
  modal.querySelector('#resultCount').value=e.counts?'yes':'no';
  const toggle=()=>modal.querySelector('#resultNoShow').hidden=status.value!=='noshow';status.onchange=toggle;toggle();
- modal.querySelector('#saveResultEdit').onclick=()=>{const ns=status.value==='noshow';if(!recordSessionResult(e,status.value,!ns||modal.querySelector('#resultCount').value==='yes',ns?(e.noShowReason||'No Show'):'',ns?modal.querySelector('#resultNote').value:'',readMusclePicker('resultMuscleGroups')))return;closeModal();render();toast('Seans sonucu kaydedildi.');};
+ modal.querySelector('#saveResultEdit').onclick=()=>{const ns=status.value==='noshow';return afterSessionResult(recordSessionResult(e,status.value,!ns||modal.querySelector('#resultCount').value==='yes',ns?(e.noShowReason||'No Show'):'',ns?modal.querySelector('#resultNote').value:'',readMusclePicker('resultMuscleGroups')),()=>{closeModal();render();toast('Seans sonucu kaydedildi.');});};
 }
 document.addEventListener('click',e=>{const button=e.target.closest('[data-edit-result]');if(button)editSessionResult(button.dataset.editResult)});
-function completeSession(id){const e=state.events.find(x=>String(x.id)===String(id));if(!e){toast('Seans bulunamadı. Sayfayı yenileyip tekrar dene.');return;}if(eventFinish(e)>Date.now()){toast('Seans tamamlandı olarak yalnızca seans bittikten sonra işaretlenebilir.');return;}if(!recordSessionResult(e,'completed',true))return;toast('Seans tamamlandı olarak kaydedildi.');render();}
-function openNoShow(id){const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned')return;if(eventFinish(e)>Date.now()){toast('No Show yalnızca seans bittikten sonra işaretlenebilir.');return;}openModal(`<h3>No Show işlemi</h3><div class="notice">Mazerete göre bu seansı paketten düşebilir veya düşmeyebilirsin.</div><div class="field"><label>Müşteri durumu</label><select id="nsReason"><option>Mazeretsiz gelmedi</option><option>Mazeretli gelmedi</option><option>Geç iptal</option><option>PT iptali</option></select></div><div class="field"><label>Seans paketten düşsün mü?</label><select id="nsCount"><option value="yes">Evet, seans say</option><option value="no">Hayır, sayma</option></select></div><div class="field"><label>Not</label><textarea id="nsNote" rows="3" placeholder="Opsiyonel not"></textarea></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="saveNs">No Show Kaydet</button></div>`);modal.querySelector('#saveNs').onclick=()=>{const count=modal.querySelector('#nsCount').value==='yes';if(!recordSessionResult(e,'noshow',count,modal.querySelector('#nsReason').value,modal.querySelector('#nsNote').value))return;closeModal();toast('No Show kaydedildi.');render();}}
+function completeSession(id){const e=state.events.find(x=>String(x.id)===String(id));if(!e){toast('Seans bulunamadı. Sayfayı yenileyip tekrar dene.');return;}if(eventFinish(e)>Date.now()){toast('Seans tamamlandı olarak yalnızca seans bittikten sonra işaretlenebilir.');return;}return afterSessionResult(recordSessionResult(e,'completed',true),()=>{toast('Seans tamamlandı olarak kaydedildi.');render();});}
+function openNoShow(id){const e=state.events.find(x=>String(x.id)===String(id));if(state.role!=='pt'||!e||e.type!=='session'||e.status!=='planned')return;if(eventFinish(e)>Date.now()){toast('No Show yalnızca seans bittikten sonra işaretlenebilir.');return;}openModal(`<h3>No Show işlemi</h3><div class="notice">Mazerete göre bu seansı paketten düşebilir veya düşmeyebilirsin.</div><div class="field"><label>Müşteri durumu</label><select id="nsReason"><option>Mazeretsiz gelmedi</option><option>Mazeretli gelmedi</option><option>Geç iptal</option><option>PT iptali</option></select></div><div class="field"><label>Seans paketten düşsün mü?</label><select id="nsCount"><option value="yes">Evet, seans say</option><option value="no">Hayır, sayma</option></select></div><div class="field"><label>Not</label><textarea id="nsNote" rows="3" placeholder="Opsiyonel not"></textarea></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn amber" id="saveNs">No Show Kaydet</button></div>`);modal.querySelector('#saveNs').onclick=()=>{const count=modal.querySelector('#nsCount').value==='yes';return afterSessionResult(recordSessionResult(e,'noshow',count,modal.querySelector('#nsReason').value,modal.querySelector('#nsNote').value),()=>{closeModal();toast('No Show kaydedildi.');render();});}}
 
 async function requestSlot(id){
  const e=state.events.find(x=>String(x.id)===String(id));if(!e||state.role!=='member')return;
@@ -1800,7 +1904,7 @@ function repairFutureDemoResults(){
 function syncTestAccount(){
  if(!state.testPrimaryId)return;
  const a=state.customerAccounts[state.customer.id]||(state.customerAccounts[state.customer.id]={});
- ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'].forEach(k=>a[k]=state[k]);
+ ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer','sessionBilling'].forEach(k=>a[k]=state[k]);
 }
 function initTestUsers(){
  if(!demoMode)return;
@@ -1843,7 +1947,7 @@ function switchTestUser(id,role,page){
  if(authUser&&!demoMode)return;
  syncTestAccount();
  const a=state.customerAccounts[id];if(!a)return;
- ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer'].forEach(k=>state[k]=a[k]);
+ ['customer','package','payment','financeHistory','messages','tasks','progressData','unread','memberTrainer','sessionBilling'].forEach(k=>state[k]=a[k]);
  state.role=role;state.financeCustomerId=id;state.page=page||(role==='pt'?'dashboard':'today');state.selectedDate=iso(today);closeModal();save();render();
 }
 function testEventVisible(e){if(state.role==='pt')return true;if(e.customerId==null&&['availability','off'].includes(e.type))return memberCanSeeAvailability(e)&&(e.type!=='availability'||!availabilityBlocked(e));return e.customerId!=null?String(e.customerId)===String(state.customer.id):['availability','off'].includes(e.type);}
