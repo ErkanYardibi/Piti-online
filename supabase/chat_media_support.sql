@@ -117,3 +117,30 @@ using (
 
 comment on column public.messages.message_type is 'text, image, video, or audio';
 comment on column public.messages.media_path is 'Private chat-media bucket object path; never a public URL';
+
+-- Match existing column-level grants; recipients can update read_at only.
+grant insert(message_type,media_path,media_mime,media_size,media_width,media_height,media_duration) on public.messages to authenticated;
+grant select(message_type,media_path,media_mime,media_size,media_width,media_height,media_duration) on public.messages to authenticated;
+create or replace function piti_private.guard_message() returns trigger
+language plpgsql set search_path='' as $$
+begin
+ if tg_op='INSERT' then
+  if new.sender_id is distinct from auth.uid() and current_user='authenticated' then raise exception 'Mesaj göndereni değiştirilemez.';end if;
+  if current_user='authenticated' then new.created_at=now();new.read_at=null;end if;
+  new.sender_role=(select role from public.profiles where id=new.sender_id);
+  if char_length(coalesce(new.body,''))>4000 or (nullif(trim(new.body),'') is null and new.media_path is null and new.sticker is null) then raise exception 'Mesaj veya medya gerekli.';end if;
+  if new.media_path is not null and current_user='authenticated' and not exists(
+   select 1 from storage.objects o where o.bucket_id='chat-media' and o.name=new.media_path
+    and o.owner_id=auth.uid()::text and (o.metadata->>'size')::bigint=new.media_size
+  ) then raise exception 'Medya yüklemesi doğrulanamadı.';end if;
+ elsif current_user='authenticated' then
+  if (to_jsonb(new)-'read_at') is distinct from (to_jsonb(old)-'read_at') then raise exception 'Mesaj içeriği değiştirilemez.';end if;
+  new.read_at=coalesce(old.read_at,now());
+ end if;
+ return new;
+end $$;
+-- NULL must never bypass media metadata checks.
+alter table public.messages add constraint messages_media_required check (
+ message_type='text' or (media_path is not null and media_mime is not null and media_size is not null
+ and (message_type='image' or media_duration is not null)
+ and (message_type='audio' or (media_width is not null and media_height is not null))));
