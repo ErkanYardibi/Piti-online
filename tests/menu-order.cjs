@@ -1,0 +1,16 @@
+const {JSDOM,VirtualConsole}=require(process.env.PITI_JSDOM_PATH||'jsdom');const fs=require('fs'),assert=require('assert/strict');
+const html=fs.readFileSync('index.html','utf8').replace('const db=','let db=').replace('<script src="/vendor/supabase.min.js"></script>','').replace('render();maybeOpenJoinLink();initAuth();','window.testRun=code=>eval(code);render();');const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));const dom=new JSDOM(html,{url:'https://mypiti.online',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{}}});
+(async()=>{try{const w=dom.window,d=w.document;w.fixture=JSON.parse(fs.readFileSync('assets/demo-state.json'));w.testRun("demoMode=true;state=clone(window.fixture);state.role='pt';state.page='appearance';save=()=>{};render()");
+const nav=()=>Array.from(d.querySelectorAll('#sidebar [data-nav]')).map(b=>b.dataset.nav);
+assert.deepEqual(nav(),['dashboard','messages','calendar','customers','finance','invites','profile','appearance','about']);
+d.querySelector('[data-menu-move="messages"][data-direction="-1"]').click();assert.equal(nav()[0],'dashboard','draft does not change saved menu');await d.querySelector('#saveMenuOrder').onclick();assert.equal(nav()[0],'messages');
+w.testRun('state=JSON.parse(JSON.stringify(state));render()');assert.equal(nav()[0],'messages','reload keeps preference');
+w.testRun("state.role='member';render()");assert.deepEqual(nav(),['today','messages','calendar','finance','progress','trainer','profile','appearance','about']);assert.match(d.querySelector('[data-nav="today"]').textContent,/Ana Sayfa/);
+w.testRun("state.role='pt';render()");d.querySelector('#resetMenuOrder').click();await d.querySelector('#saveMenuOrder').onclick();assert.equal(nav()[0],'dashboard');
+w.testRun("state.menuOrder={pt:['messages','messages','invalid','trainer']};renderNav()");assert.equal(nav().length,9);assert.equal(nav()[0],'messages');assert.ok(!nav().includes('trainer'));
+w.testRun("demoMode=false;authUser={id:'owner'};liveStateOwner='owner';state=emptyLiveState();state.role='pt';state.cloudOwner='owner';db={from:table=>({update:()=>({eq:async()=>({error:null})}),upsert:async row=>{window.row=JSON.parse(JSON.stringify(row));return {error:null}}})}");
+await w.testRun("saveAccountPreference('menuOrder',{pt:['messages','dashboard']})");assert.equal(w.row.data.menuOrder.pt[0],'messages');assert.equal(w.row.user_id,'owner');
+w.testRun("state=clone(window.row.data);renderNav()");assert.equal(nav()[0],'messages');
+w.testRun("syncCloudDataNow=async()=>{throw Error('write failure')}");await assert.rejects(w.testRun("saveAccountPreference('menuOrder',{pt:['calendar']})"),/write failure/);assert.equal(nav()[0],'messages','write failure restores stored order');
+w.testRun("state=emptyLiveState();state.role='pt';renderNav()");assert.equal(nav()[0],'dashboard','other account uses default');assert.ok(!w.testRun('clientHistoryKeys.includes("menuOrder")'));
+assert.deepEqual(errors,[]);console.log('PASS: exact defaults, move/save/reset, role isolation, validation, database persistence, reload and failure rollback');}finally{dom.window.close()}})().catch(e=>{console.error(e);process.exitCode=1});
