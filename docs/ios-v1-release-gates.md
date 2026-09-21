@@ -3,6 +3,11 @@
 Durum: geliştirme başlangıcı. App Store'a gönderilebilir veya TestFlight'ta
 kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı değiştirilmedi.
 
+İlk dahili TestFlight testi bütün V1 özelliklerinin tamamlanmasını beklemez.
+İmzalama, ayrı test ortamı ve çalışır bir paket gerekir. Sınırlı ilk beta kapsamı
+ve yükleme öncesi kontrol: `testflight-first-beta.md`. Aşağıdaki tüm V1 kapıları
+ilk dahili testin ön koşulları olarak yorumlanmamalıdır.
+
 ## Tamamlanan kaynak çalışması
 
 - Swift/WKWebView istemcisi; adres çubuğu yok, native hata/yeniden dene ekranı,
@@ -34,7 +39,7 @@ kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı deği
 | Xcode | GitHub macOS üzerinde Debug ve Release imzasız simülatör derlemeleri geçti; Staging Bundle ID/APNs ayrımı doğrulandı. Simülatör derlemesi gerçek cihaz testi değildir. |
 | Bildirimler | Gerçek cihazda foreground/background/cold start, izin reddi, logout, token değişimi, iki cihaz, iki kullanıcı ve demo izolasyonu doğrulanmalı. |
 | Kalan push olayları | Yaklaşan seans zamanlayıcısı, gecikeceğim olayı ve PT seçili müşterilere manuel bildirim tamamlanmalı. Kategori tercihleri kodda ve yerel testlerde tamamlandı; staging ve gerçek cihaz doğrulaması açık. |
-| Hesap silme | Profil özeti, şifreyle talep gönderme ve durum API'si test edildi. Servis KAPALI; kalıcı temizleme motoru, ortak geçmiş kararı, Storage ve yedek temizliği, oturum kapandıktan sonra tamamlanma bildirimi açık. Sadece talep kaydı yeterli DEĞİL; yapılmadan gönderilmez. |
+| Hesap silme | Talep, müşteri geçmişini koruma ve PT hazırlık akışı test edildi. Servis KAPALI; kalıcı temizleme motoru, Storage/yedek temizliği ve tamamlanma bildirimi açık. Genel App Store gönderimi öncesinde tamamlanmalı; ilk dahili beta bu özelliği kapalı tutabilir. |
 | Gizlilik | Erişilebilir gerçek gizlilik ve destek URL'leri; sorumlu kişi/şirket bilgileri; sağlık/ölçüm, fotoğraf, mesaj, ödeme, cihaz tanımlayıcıları ve saklama beyanları gerçek uygulamayla eşleşmeli. |
 | Mesajlaşma güvenliği | Bildir/engelle, uygunsuz içerik yönetimi ve erişilebilir destek kanalı değerlendirilip tamamlanmalı (1.2). |
 | Ödeme modeli | Yüz yüze PT hizmetleri ile uygulama özelliği/dijital abonelik ücretini ayır. Fiziksel PT hizmeti EFT kaydı, dijital premium özellik satışıyla aynı sayılmaz. |

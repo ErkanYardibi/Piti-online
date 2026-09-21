@@ -1,6 +1,7 @@
 # PiTi iOS V1 — development source
 
 Not yet a signed app or App Store-ready release. See ../docs/ios-v1-release-gates.md.
+First internal beta scope and upload preparation: ../docs/testflight-first-beta.md.
 
 ## Mac / Xcode
 
