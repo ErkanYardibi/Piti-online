@@ -30,6 +30,7 @@ jobs:
           node tests/account-deletion-ui.cjs
           node tests/account-deletion-history-db.cjs
           node tests/account-deletion-history-ui.cjs
+          node tests/account-deletion-prepare-db.cjs
           node tests/self-password.cjs
           node tests/demo-isolation.cjs
           node tests/offline-guard.cjs

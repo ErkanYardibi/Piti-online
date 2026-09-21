@@ -79,8 +79,10 @@ testi geçti. Bunlar kalıcı silme/geri yükleme testleri değildir.
 PT silindiğinde müşteri seans/ödeme geçmişinin salt okunur korunması kararı
 uygulama kapsamına alındı. Müşteriye özel arşiv yakalama/okuma katmanı ve PT'im
 ekranı eklendi; ayrı veritabanı ve ekran testleri geçti. Kalıcı temizleme motoruna
-bağlama, ilişki yazılarını durdurma ve yeni PT'ye bağlantıyı uçtan uca doğrulama
-hâlâ açık; canlıda özellik etkinleştirilmedi.
+bağlama kapsamında atomik PT hazırlık RPC'si de eklendi: erişim kesme, arşiv
+eksiksizliği, bağlantıyı ayırma, davet/kuyruk temizliği ve geri alma/tekrar testleri
+geçti. Kalıcı Storage/Auth/yedek temizliği, gerçek eşzamanlılık ve yeni PT'ye
+bağlantıyı uçtan uca doğrulama hâlâ açık; canlıda özellik etkinleştirilmedi.
 
 Native derleme kanıtı: [GitHub Actions #1](https://github.com/ErkanYardibi/Piti-online/actions/runs/35635622637).
 Bu çalıştırma APNs'e gerçek bildirim göndermedi ve IPA/TestFlight oluşturmadı.

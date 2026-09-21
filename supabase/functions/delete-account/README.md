@@ -38,17 +38,23 @@ before any deployment; no deployment command was executed here.
   SHA-256 hashes; no user details are returned by the receipt status endpoint.
 - Repeated submission of the same request ID/receipt is idempotent. Another pending
   request for the account is rejected and exposed only in that account's preview.
-- Initiation does not suspend accounts, revoke their original sessions or delete
-  data. No background scheduler or cleanup worker exists in this commit.
+- Initiation itself does not suspend accounts or revoke sessions. A separate,
+  service-only `prepare_trainer_deletion` RPC now atomically suspends the trainer,
+  removes their sessions, archives history, detaches members into empty unlinked
+  records and revokes old invitations/queued pushes. It remains gated OFF and is
+  not called by this initiation handler. No scheduler or permanent purge worker exists.
 - Admin self-deletion is unavailable pending MFA and admin succession handling.
 
 ## Remaining release work
 
 Shared-history decision: retain session/payment history for the member as
 read-only historical information. The member_retained_history migration and UI
-implement capture/read primitives, including former members and billing ledgers;
-they do not detach clients or perform cleanup. Determine legal retention periods.
-Implement the actual cleanup worker, identity/relationship write freeze, Storage
+implement capture/read primitives, including former members and billing ledgers.
+The preparation RPC integrates capture with a transactional write barrier and
+detachment. A failed phase rolls back; retries return the same prepared result.
+It does not delete Auth identities, Storage or historical rows. Test real concurrent
+connections and large-account limits; extend the trainer-code flow for unlinked
+members. Determine legal retention periods. Implement the actual cleanup worker, Storage
 cleanup, cross-account snapshot cleanup, incident/recovery-copy treatment and
 restoration protection. Implement completion receipt display after logout/app
 restart; current profile refresh can track a request while its account is active.

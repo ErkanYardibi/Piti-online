@@ -3,7 +3,7 @@
  function render({target,client,context}){
   const owner=context();if(!owner.ready||owner.demo||owner.role!=='member')return;
   const doc=target.ownerDocument,box=doc.createElement('section'),button=doc.createElement('button'),content=doc.createElement('div');
-  box.className='card';button.className='btn ghost';button.textContent='Hesabı silinen PT geçmişim';content.setAttribute('aria-live','polite');box.append(button,content);target.append(box);
+  box.className='card';button.className='btn ghost';button.textContent='Eski PT seans ve ödeme arşivim';content.setAttribute('aria-live','polite');box.append(button,content);target.append(box);
   const active=()=>{const c=context();return box.isConnected&&c.ready&&!c.demo&&c.role==='member'&&c.userId===owner.userId;};
   const add=(tag,text)=>{const el=doc.createElement(tag);el.textContent=text;content.append(el);};
   button.onclick=async()=>{

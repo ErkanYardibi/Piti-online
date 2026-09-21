@@ -1,7 +1,8 @@
 # PiTi — hesap silme uygulama kapsamı
 
 Durum: profil özeti, şifre doğrulaması, tekrarlanabilir talep kaydı ve durum API'si
-uygulandı; kalıcı temizleme motoru henüz yok. Talep kabulü varsayılan kapalı.
+uygulandı. PT için atomik hazırlık (erişimi kesme, arşiv, bağlantıyı ayırma) eklendi;
+kalıcı temizleme motoru henüz yok. Talep kabulü varsayılan kapalı.
 Canlıda sadece tablo/sütun metaverisi okundu; kullanıcı içerikleri okunmadı ve
 veri silinmedi. App Store için talep kaydı tek başına yeterli değil.
 
@@ -62,12 +63,37 @@ paket/ödeme özetleri izin verilen alanlarla alınır. PT profili, mesaj, sağl
 başlığı gibi kullanıcı metinleri yine kişisel bilgi içerebilir; bu alan seçimi
 tam anonimleştirme veya yasal uygunluk iddiası değildir.
 
-Bu katman kendi başına PT bağlantısını kesmez, yeni müşteri kaydı yaratmaz,
-hesap silmez ve talebi tamamlandı işaretlemez. Temizleme motoru arşivden önce
-ilişkiye ait tüm yazıları (müşterinin yazıları dahil) durdurmalı; arşiv sayısını
-doğrulamalı; eski transfer snapshot'larını ve diğer kopyaları temizlemeli; ardından
-müşteriyi yeni PT'ye bağlanabilir duruma getirmelidir. Bu bütünleşik akış ve
-Storage/yedek temizliği bitene kadar silme kabulü kapalı kalır.
+Arşiv katmanı tek başına hesap silmez veya talebi tamamlandı işaretlemez.
+`20260921191842_account_deletion_prepare.sql` arşivi hazırlık akışına bağlar.
+Yalnızca sunucu rolünün çağırabildiği `prepare_trainer_deletion` mevcut silme
+talebini işler; hem enabled hem worker_ready kapalıysa (veya biri kapalıysa)
+çalışmaz. Bu bayraklar geliştirme sırasında canlıda değiştirilmedi.
+
+Hazırlık tek veritabanı işlemidir: PT askıya alınır, oturumları kaldırılır,
+gelecekteki plan/talepler iptal edilir, arşiv eksiksizliği kontrol edilir, eski
+ilişkiler kapatılır. Bağlı müşterinin hesabı/oturumları ve kişisel profil alanları
+korunur; PT'siz boş bir müşteri kaydı oluşturulur. Eski bakiye ve paket buraya
+taşınmaz. Müşterinin eski ekran kopyası temizlenir; eski ilişkiye yazma mevcut
+koruma tetikleyicisiyle engellenir. Önceden başka PT'ye geçen müşterinin mevcut
+ilişkisi ve ekran kopyası değişmez. Eski davet/giriş bağlantıları iptal edilir;
+PT cihazları kapatılır ve eski ilişki bildirim kuyruğu temizlenir. APNs'e zaten
+gönderilmiş bildirim geri çağrılamaz.
+
+Hata olursa tamamı geri alınır. Yeniden çağrı aynı hazırlık sonucunu döndürür;
+ikinci müşteri/arşiv/bildirim yaratmaz. Talep `processing` olarak kalır. Bu aşama
+Auth kimliğini, Storage dosyalarını veya eski tarihsel satırları silmez.
+
+İlk sürüm kısa süreli tablo yazma kilitleri kullanır; okumalar devam eder ama
+başka ilişkilerin yazıları da kısa süre bekleyebilir. Kilit bekleme sınırı 2 saniye;
+zaman aşımı/deadlock sonrası sunucu tekrar denemelidir. Gerçek çok bağlantılı
+eşzamanlılık/yük testi ve büyük PT hesapları için süre/boyut sınırları yayına çıkış
+kapısıdır. Test motoru tek bağlantılıdır; bu test yapılmış sayılmaz.
+
+Yeni PT'ye bağlanmak için boş ilişki kaydı hazırdır; mevcut PT geçiş kodu akışının
+PT'siz müşteriyi kabul edecek şekilde genişletilmesi ve uçtan uca test edilmesi
+hâlâ gerekir. Kalıcı temizleme motoru ayrıca eski transfer snapshot'larını ve
+diğer kopyaları, Storage/yedekleri temizlemeli; müşteri hesabı silme yolunu ve
+Auth sonlandırmasını tamamlamalıdır. Bunlar bitene kadar silme kabulü kapalıdır.
 
 ## Bu aşamadaki doğrulama
 
@@ -82,6 +108,11 @@ sahipliği, yeni PT'den izolasyon, tekrar, alan sınırları, tahsilatlar, PT Au
 silindikten sonra korunma, müşteri silindiğinde yalnızca kendi arşivinin kalkması,
 iptal edilmiş oturum, ekran hesap değişimi ve güvenli metin gösterimi. Test
 şeması tüm canlı bağımlılıkları içermez; bu bir üretim hesabı silme testi değildir.
+
+Hazırlık testi mevcut kapalı ilişki ve eski ekran korumalarını gerçek kaynak
+SQL'inden yükler. Ortada hata ve eksik arşiv enjekte edilerek tüm işlemin geri
+alınması; tekrar; müşteri oturumlarının korunması; eski yazı/davetin engellenmesi;
+iptal edilmiş seansın arşivlenmesi ve başka PT'nin veri/kuyruk izolasyonu doğrulandı.
 
 ## Kabul testleri
 
