@@ -561,9 +561,9 @@ async function loadChatPolicy(){
 }
 function scheduleChatRead(){clearTimeout(chatReadTimer);chatReadTimer=setTimeout(markVisibleChatRead,300)}
 async function markVisibleChatRead(){
- if(chatReadBusy||document.hidden||!document.hasFocus()||state.page!=='messages'||(!authUser&&!demoMode))return;
+ if(chatReadBusy||document.querySelector('.modalBack.show')||document.hidden||!document.hasFocus()||state.page!=='messages'||(!authUser&&!demoMode))return;
  const box=document.getElementById('chatBox'),clientId=chatClientId(selectedChatCustomer()),actor=chatActorId();if(!box||!clientId)return;
- const area=box.getBoundingClientRect(),top=Math.max(area.top,0),bottom=Math.min(area.bottom,window.innerHeight);if(top>=bottom)return;
+ const area=box.getBoundingClientRect(),headerBottom=document.querySelector('.topbar')?.getBoundingClientRect().bottom||0,navTop=getComputedStyle(sidebar).position==='fixed'?sidebar.getBoundingClientRect().top:window.innerHeight,top=Math.max(area.top,headerBottom,0),bottom=Math.min(area.bottom,window.innerHeight,navTop);if(top>=bottom)return;
  const visible=new Set(Array.from(box.querySelectorAll('[data-chat-message]')).filter(el=>{const r=el.getBoundingClientRect();return Math.min(r.bottom,bottom)-Math.max(r.top,top)>=Math.min(32,r.height)&&r.height>0}).map(el=>el.dataset.chatMessage));
  const ids=chatRows.filter(m=>visible.has(String(m.id))&&m.sender_id!==actor&&!m.read_at).map(m=>m.id);if(!ids.length)return;
  chatReadBusy=true;
