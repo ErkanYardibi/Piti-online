@@ -2,7 +2,7 @@ name: iOS source verification
 on:
   push:
     branches: [feature/ios-v1]
-    paths: ['ios/**', 'index.html', 'assets/ios-bridge.js', 'assets/push-preferences.js', 'tests/ios-*', 'tests/fixtures/ios-*', 'supabase/migrations/**', 'supabase/functions/send-push/**', '.github/workflows/ios-verify.yml']
+    paths: ['ios/**', 'index.html', 'assets/ios-bridge.js', 'assets/push-preferences.js', 'assets/account-deletion.js', 'tests/ios-*', 'tests/account-deletion*', 'tests/fixtures/ios-*', 'supabase/migrations/**', 'supabase/functions/send-push/**', 'supabase/functions/delete-account/**', '.github/workflows/ios-verify.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,6 +25,9 @@ jobs:
           node tests/ios-push-db.cjs
           node tests/ios-push-preferences.cjs
           node tests/ios-push-preferences-db.cjs
+          node --test tests/account-deletion-edge.test.mjs
+          node tests/account-deletion-db.cjs
+          node tests/account-deletion-ui.cjs
           node tests/self-password.cjs
           node tests/demo-isolation.cjs
           node tests/offline-guard.cjs

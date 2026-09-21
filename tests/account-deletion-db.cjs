@@ -1,0 +1,34 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const {PGlite}=require(process.env.PITI_PGLITE_PATH||'@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite(),uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
+ await db.exec(fs.readFileSync('tests/fixtures/ios-push-schema.sql','utf8'));
+ await db.exec("alter table public.profiles add column role text default 'member';create table piti_private.admin_users(user_id uuid);create table public.trainer_transfers(member_id uuid,old_pt_id uuid,new_pt_id uuid);");
+ for(const n of [1,2]){await db.query('insert into auth.users values($1)',[uid(n)]);await db.query('insert into public.profiles(id) values($1)',[uid(n)]);await db.query('insert into auth.sessions(id,user_id) values($1,$2)',[uid(n+10),uid(n)]);}
+ await db.query('insert into public.clients(id,pt_id,user_id) values($1,$2,$3)',[uid(20),uid(2),uid(1)]);
+ await db.exec(fs.readFileSync('supabase/migrations/20260921185333_account_deletion_requests.sql','utf8'));
+ const login=async n=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:uid(n),session_id:uid(n+10)})]);await db.exec('set role authenticated');};
+ const preview=async()=> (await db.query('select public.account_deletion_preview() p')).rows[0].p;
+ const request=(actor,sid,fp,id=99)=>db.query('select public.account_deletion_request($1,$2,$3,$4,$5) job',[uid(actor),uid(sid),uid(id),'a'.repeat(64),fp]);
+ await login(1);assert.equal((await preview()).available,false);
+ await assert.rejects(db.query('select * from piti_private.account_deletion_requests'),/permission denied/);
+ await assert.rejects(request(1,11,'fp'),/permission denied/);
+ await db.exec('reset role;set role service_role');await assert.rejects(request(1,11,'fp'),/henüz etkin/);
+ await db.exec("reset role;update piti_private.account_deletion_settings set enabled=true,worker_ready=true,policy_version='fixture-only',notice='Local test policy, not production',max_hours=24");
+ await login(1);const p=await preview();assert.equal(p.available,true);assert.equal(p.summary.client_records,1);
+ await db.exec('reset role;set role service_role');
+ await assert.rejects(request(1,12,p.fingerprint),/Geçerli hesap/);
+ await assert.rejects(request(1,11,'stale'),/özeti değişti/);
+ let r=await request(1,11,p.fingerprint);assert.equal(r.rows[0].job.state,'requested');
+ r=await request(1,11,p.fingerprint);assert.equal(r.rows[0].job.id,uid(99));
+ await assert.rejects(request(1,11,p.fingerprint,98),/zaten var/);
+ assert.equal((await db.query('select public.account_deletion_receipt($1,$2) r',[uid(99),'b'.repeat(64)])).rows[0].r,null);
+ assert.equal((await db.query('select public.account_deletion_receipt($1,$2) r',[uid(99),'a'.repeat(64)])).rows[0].r.state,'requested');
+ await login(2);assert.equal((await preview()).request,null,'other account cannot see the request');
+ await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from auth.users')).rows[0].n,2);assert.equal((await db.query('select count(*)::int n from public.clients')).rows[0].n,1);
+ await assert.rejects(db.query("update piti_private.account_deletion_requests set state='completed',completed_at=now()"),/check constraint/);
+ await db.query('delete from auth.sessions where id=$1',[uid(11)]);await login(1);await assert.rejects(preview(),/Aktif oturum/);
+ await db.exec('reset role;set role service_role');await assert.rejects(request(1,11,p.fingerprint),/Geçerli hesap/);
+ await db.exec('reset role');await db.query('insert into piti_private.admin_users values($1)',[uid(2)]);await login(2);assert.equal((await preview()).available,false);
+ await db.close();console.log('PASS: deletion default-OFF, self-only preview, service-only queue, current session, idempotency, secret receipt and no data deletion');
+})().catch(error=>{console.error(error);process.exit(1)});

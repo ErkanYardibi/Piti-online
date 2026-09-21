@@ -34,7 +34,7 @@ kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı deği
 | Xcode | GitHub macOS üzerinde Debug ve Release imzasız simülatör derlemeleri geçti; Staging Bundle ID/APNs ayrımı doğrulandı. Simülatör derlemesi gerçek cihaz testi değildir. |
 | Bildirimler | Gerçek cihazda foreground/background/cold start, izin reddi, logout, token değişimi, iki cihaz, iki kullanıcı ve demo izolasyonu doğrulanmalı. |
 | Kalan push olayları | Yaklaşan seans zamanlayıcısı, gecikeceğim olayı ve PT seçili müşterilere manuel bildirim tamamlanmalı. Kategori tercihleri kodda ve yerel testlerde tamamlandı; staging ve gerçek cihaz doğrulaması açık. |
-| Hesap silme | Sadece talep tablosu yeterli DEĞİL. Kullanıcı uygulama içinden başlatmalı; Auth, ilişkili kayıtlar, Storage ve saklama istisnaları gerçekten işlenmeli; tamamlanma bildirilmeli. Yapılmadan gönderilmez. |
+| Hesap silme | Profil özeti, şifreyle talep gönderme ve durum API'si test edildi. Servis KAPALI; kalıcı temizleme motoru, ortak geçmiş kararı, Storage ve yedek temizliği, oturum kapandıktan sonra tamamlanma bildirimi açık. Sadece talep kaydı yeterli DEĞİL; yapılmadan gönderilmez. |
 | Gizlilik | Erişilebilir gerçek gizlilik ve destek URL'leri; sorumlu kişi/şirket bilgileri; sağlık/ölçüm, fotoğraf, mesaj, ödeme, cihaz tanımlayıcıları ve saklama beyanları gerçek uygulamayla eşleşmeli. |
 | Mesajlaşma güvenliği | Bildir/engelle, uygunsuz içerik yönetimi ve erişilebilir destek kanalı değerlendirilip tamamlanmalı (1.2). |
 | Ödeme modeli | Yüz yüze PT hizmetleri ile uygulama özelliği/dijital abonelik ücretini ayır. Fiziksel PT hizmeti EFT kaydı, dijital premium özellik satışıyla aynı sayılmaz. |
@@ -72,8 +72,9 @@ Bu test dosyası değiştirilmedi ve bütün testler geçti iddiası yapılmıyo
 Ek olarak dört bildirim tercih ekranı testi ve ayrı Postgres tercih testi geçti:
 iki cihaz, hesap izolasyonu, geçersiz oturum, yetki/RLS, kategori filtreleme,
 bekleyen kuyruğu temizleme ve yeniden açınca eski bildirimleri göndermeme.
-Hesap silme bağımlılıkları `account-deletion-scope.md` dosyasında kayıtlı;
-henüz çalışan bir hesap silme servisi veya ekranı eklenmedi.
+Hesap silme bağımlılıkları `account-deletion-scope.md` dosyasında kayıtlı.
+Başlatma ekranı ve talep API'si eklendi; altı servis, dört ekran ve bir Postgres
+testi geçti. Bunlar kalıcı silme/geri yükleme testleri değildir.
 
 Native derleme kanıtı: [GitHub Actions #1](https://github.com/ErkanYardibi/Piti-online/actions/runs/35635622637).
 Bu çalıştırma APNs'e gerçek bildirim göndermedi ve IPA/TestFlight oluşturmadı.

@@ -215,6 +215,7 @@ button{color:inherit}a{color:var(--blueText)}
 <script src="/vendor/supabase.min.js"></script>
 <script src="/assets/ios-bridge.js"></script>
 <script src="/assets/push-preferences.js"></script>
+<script src="/assets/account-deletion.js"></script>
 <script>
 (() => {
 const TR = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
@@ -497,6 +498,7 @@ async function checkAccountAccess(){const {data,error}=await db.rpc('account_con
 function renderSelfPasswordSettings(target){
  if(!target){if(adminMode||state.page!=='profile')return;target=view}
  if(!adminMode&&typeof nativeBridge!=='undefined')nativeBridge?.renderSettings(target);
+ if(!adminMode)window.PiTiAccountDeletion?.render({target,client:db,context:()=>({userId:authUser?.id,ready:!!authUser&&liveStateOwner===authUser.id&&!adminMode,demo:demoMode}),url:SUPABASE_URL,key:SUPABASE_KEY});
  if(target.querySelector('#selfPasswordForm'))return;
  const section=document.createElement('section');section.className='card';section.style.marginTop='18px';
  section.innerHTML=`<h2 class="sectionTitle">Şifremi değiştir</h2>${demoMode?'<p class="muted">DEMO hesabının ortak giriş şifresi değiştirilemez.</p>':`<form id="selfPasswordForm" style="max-width:440px"><div class="field"><label for="selfNewPassword">Yeni şifre</label><input class="input" id="selfNewPassword" type="password" autocomplete="new-password" minlength="6" required></div><div class="field"><label for="selfRepeatPassword">Yeni şifre tekrar</label><input class="input" id="selfRepeatPassword" type="password" autocomplete="new-password" minlength="6" required></div><p class="small muted">En az 6 karakter kullan.</p><p id="selfPasswordStatus" role="status" aria-live="polite"></p><button type="submit" class="btn primary">Şifremi değiştir</button></form>`}`;

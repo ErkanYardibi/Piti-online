@@ -1,8 +1,9 @@
 # PiTi — hesap silme uygulama kapsamı
 
-Durum: kaynak kod üzerinde veri kapsamı incelemesi; çalışan silme özelliği değil.
-Canlı veri okunmadı veya silinmedi. Başvuru öncesinde aşağıdaki akış gerçekten
-uygulanıp ayrı ortamda doğrulanmalı.
+Durum: profil özeti, şifre doğrulaması, tekrarlanabilir talep kaydı ve durum API'si
+uygulandı; kalıcı temizleme motoru henüz yok. Talep kabulü varsayılan kapalı.
+Canlıda sadece tablo/sütun metaverisi okundu; kullanıcı içerikleri okunmadı ve
+veri silinmedi. App Store için talep kaydı tek başına yeterli değil.
 
 ## Kaynakta doğrulanan bağımlılıklar
 
@@ -17,6 +18,7 @@ uygulanıp ayrı ortamda doğrulanmalı.
 | Push | Oturuma bağlı cihazlar, teslim kuyruğu ve kullanıcı bildirim tercihleri. |
 | Yönetim | account_audit, hesap işlemleri ve hesap kontrol kayıtları; kişisel veri/saklama kapsamı incelenmeli. |
 | Kurtarma kopyaları | daily-recovery-copies.sql public tabloları JSON olarak kopyalıyor. Silinen kişinin geri yüklemede yeniden oluşmasını önleyen süreç gerekli. Mevcut sınır son 7 başarılı kopyadır; kesin 7 gün değildir. |
+| Olay yedekleri | Şema incelemesinde ayrıca piti_private.incident_backups bulundu. Günlük kurtarma kopyalarından ayrı ele alınmalı. |
 
 ## Uygulanacak akış
 
@@ -36,6 +38,19 @@ Finansal kayıtlar, güvenlik kayıtları ve yedekler için hangi bilgilerin han
 süreyle tutulacağı henüz belirlenmedi. Bu belge bir yasal saklama süresi veya
 uygunluk iddiası oluşturmaz. Kullanıcıya gösterilecek silme açıklaması gerçek
 saklama uygulamasıyla eşleşmeden özellik yayına alınmamalı.
+
+Kalıcı temizleme motorunun ortak veri davranışı için açık karar: PT hesabı
+silindiğinde müşterilerdeki ortak seans/ödeme geçmişi korunacak mı? Müşterinin
+bağımsız Auth hesabının silinmemesi esastır. Bu karar, kişisel ölçümler ve ortak
+geçmişin hangi kayıtlarının temizleneceğini belirleyen uygulama planını değiştirir.
+
+## Bu aşamadaki doğrulama
+
+Altı Edge Function testi, dört ekran testi ve geçici Postgres testi geçti.
+Şifre doğrulaması taklit Auth yanıtlarıyla test edildi; gerçek bir kullanıcıyla
+giriş veya silme yapılmadı. Testler yetki, oturum, yanlış hesap, tekrar, özet
+değişimi, gizli durum anahtarı, kapalı servis ve hatalı başarı mesajlarını kapsar.
+Gerçek dosya/veri temizleme ve yedekten geri yükleme testleri hâlâ açıktır.
 
 ## Kabul testleri
 
