@@ -2,7 +2,7 @@ name: iOS source verification
 on:
   push:
     branches: [feature/ios-v1]
-    paths: ['ios/**', 'index.html', 'assets/ios-bridge.js', 'tests/ios-*', 'tests/fixtures/ios-*', 'supabase/migrations/**', 'supabase/functions/send-push/**', '.github/workflows/ios-verify.yml']
+    paths: ['ios/**', 'index.html', 'assets/ios-bridge.js', 'assets/push-preferences.js', 'tests/ios-*', 'tests/fixtures/ios-*', 'supabase/migrations/**', 'supabase/functions/send-push/**', '.github/workflows/ios-verify.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,6 +23,8 @@ jobs:
           export PITI_JSDOM_PATH="$RUNNER_TEMP/piti-test-tools/node_modules/jsdom"
           node --test tests/ios-push.test.mjs
           node tests/ios-push-db.cjs
+          node tests/ios-push-preferences.cjs
+          node tests/ios-push-preferences-db.cjs
           node tests/self-password.cjs
           node tests/demo-isolation.cjs
           node tests/offline-guard.cjs

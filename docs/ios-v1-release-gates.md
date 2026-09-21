@@ -8,6 +8,10 @@ kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı deği
 - Swift/WKWebView istemcisi; adres çubuğu yok, native hata/yeniden dene ekranı,
   güvenli alan ve klavye davranışı; normal web kullanıcıları için etkisiz JS köprüsü.
 - Açık kullanıcı eylemiyle bildirim izni; iPhone ayarlarına yönlendirme.
+- Profilde mesaj, seans, görev ve ödeme bildirim tercihleri. Hesap genelinde
+  sunucuda tutulur; kapatılan türün bekleyen bildirimleri temizlenir, yeni
+  bildirimler ve gönderim kuyruğu sunucuda filtrelenir. Gönderilmiş bildirimler
+  geri alınamaz. Tercihler iPhone izinlerini değiştirmez.
 - Native APNs cihaz kaydı, oturumla eşleştirme, çıkışta devre dışı bırakma.
 - Mesaj, görev, seans talebi/sonucu/zaman değişikliği ve ödeme değişikliği için
   sunucudan belirlenen alıcılar; mesaj içeriği ve sağlık bilgisi kilit ekranına gitmez.
@@ -29,7 +33,7 @@ kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı deği
 | Ayrı STAGING | workers.dev CANLI ile aynı veriyi kullanıyor. Staging URL boş bırakıldı; canlıya otomatik geçiş yok. Frontend ve backend birlikte ayrılmalı. |
 | Xcode | GitHub macOS üzerinde Debug ve Release imzasız simülatör derlemeleri geçti; Staging Bundle ID/APNs ayrımı doğrulandı. Simülatör derlemesi gerçek cihaz testi değildir. |
 | Bildirimler | Gerçek cihazda foreground/background/cold start, izin reddi, logout, token değişimi, iki cihaz, iki kullanıcı ve demo izolasyonu doğrulanmalı. |
-| Kalan push olayları | Yaklaşan seans zamanlayıcısı, gecikeceğim olayı, PT seçili müşterilere manuel bildirim ve kategori tercihleri tamamlanmalı. |
+| Kalan push olayları | Yaklaşan seans zamanlayıcısı, gecikeceğim olayı ve PT seçili müşterilere manuel bildirim tamamlanmalı. Kategori tercihleri kodda ve yerel testlerde tamamlandı; staging ve gerçek cihaz doğrulaması açık. |
 | Hesap silme | Sadece talep tablosu yeterli DEĞİL. Kullanıcı uygulama içinden başlatmalı; Auth, ilişkili kayıtlar, Storage ve saklama istisnaları gerçekten işlenmeli; tamamlanma bildirilmeli. Yapılmadan gönderilmez. |
 | Gizlilik | Erişilebilir gerçek gizlilik ve destek URL'leri; sorumlu kişi/şirket bilgileri; sağlık/ölçüm, fotoğraf, mesaj, ödeme, cihaz tanımlayıcıları ve saklama beyanları gerçek uygulamayla eşleşmeli. |
 | Mesajlaşma güvenliği | Bildir/engelle, uygunsuz içerik yönetimi ve erişilebilir destek kanalı değerlendirilip tamamlanmalı (1.2). |
@@ -64,6 +68,12 @@ demo-isolation, offline-guard testleri yerelde geçti. Mevcut
 `account-transition.test.cjs` içindeki 4 hata, eksik `navigator` test taklidi
 yüzünden oluşuyor; değiştirilmemiş `195fb2e` tabanında da aynı hatalar doğrulandı.
 Bu test dosyası değiştirilmedi ve bütün testler geçti iddiası yapılmıyor.
+
+Ek olarak dört bildirim tercih ekranı testi ve ayrı Postgres tercih testi geçti:
+iki cihaz, hesap izolasyonu, geçersiz oturum, yetki/RLS, kategori filtreleme,
+bekleyen kuyruğu temizleme ve yeniden açınca eski bildirimleri göndermeme.
+Hesap silme bağımlılıkları `account-deletion-scope.md` dosyasında kayıtlı;
+henüz çalışan bir hesap silme servisi veya ekranı eklenmedi.
 
 Native derleme kanıtı: [GitHub Actions #1](https://github.com/ErkanYardibi/Piti-online/actions/runs/35635622637).
 Bu çalıştırma APNs'e gerçek bildirim göndermedi ve IPA/TestFlight oluşturmadı.

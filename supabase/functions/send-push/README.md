@@ -1,6 +1,7 @@
 # APNs dispatcher — NOT deployed
 
-Apply the migration to a verified isolated staging project only after schema review.
+Apply the foundation and notification-preferences migrations, in order, to a
+verified isolated staging project only after schema review.
 Its private push_settings row defaults to enabled=false. No production mutations
 are made by preparing these files. Do not enable this on the shared DEMO project.
 
@@ -32,5 +33,13 @@ the stable collapse ID mitigates but does not promise exactly-once delivery.
 
 Implemented events: messages, new tasks, changed session status/time and payment
 submission/decision. Pending V1 work: scheduled session reminders, delay events,
-notification preference categories, selected-client broadcast, full real-device
+selected-client broadcast, full real-device
 APNs tests and load/rate-limit hardening. Do not mark all V1 notifications complete.
+
+Account-wide preferences cover messages, sessions, tasks and payments. The app
+loads confirmed server values before allowing edits. RPCs derive the account
+from the active session; callers cannot choose another user's ID. Opting out
+suppresses enqueue and deletes pending/leased deliveries in that category;
+claim also rechecks preferences. Already dispatched/in-flight APNs requests
+cannot be recalled. Opting back in applies to new events, not purged old jobs.
+These settings never request or bypass the iPhone's notification permission.

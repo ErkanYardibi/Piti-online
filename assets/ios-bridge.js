@@ -54,6 +54,7 @@
     section.querySelector('[data-push-enable]').onclick=()=>post('requestPushPermission');
     section.querySelector('[data-push-settings]').onclick=()=>post('notificationSettings');
     section.querySelector('[data-push-retry]').onclick=()=>{registeredKey='';enqueueSync();};
+    w.PiTiPushPreferences?.render({target:section,client,context:()=>({...context(),ready:context().ready&&!leaving})});
    }
   };
  }
