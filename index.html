@@ -155,6 +155,7 @@ button{color:inherit}a{color:var(--blueText)}
 .appearanceOptions{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:720px}.appearancePreview{margin:16px 0;padding:20px;border-radius:16px;background:var(--bg);border:1px solid var(--line)}
 .aboutCopy{max-width:760px;line-height:1.75}.aboutCopy h2{margin-top:26px}.aboutCredit{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}
 @media(max-width:480px){.appearanceOptions{grid-template-columns:1fr}}
+.chatRead{color:var(--green2);font-weight:750}.chatSent{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -549,6 +550,31 @@ function renderManagedAccountControls(c,panel){
  });
 }
 // Shared screens call this data layer; only storage differs in demo mode.
+
+let chatPolicyCache=null,chatReadTimer=null,chatReadBusy=false;
+function chatExpired(m,policy){const raw=m.created_at||m.date||policy.legacy_started_at,date=Date.parse(raw);return Number.isFinite(date)&&date+policy.days*86400000<=Date.now()}
+async function loadChatPolicy(){
+ if(demoMode)return {days:90,legacy_started_at:new Date().toISOString()};
+ const owner=authUser?.id;if(!owner)return null;
+ if(chatPolicyCache?.owner===owner&&Date.now()-chatPolicyCache.at<60000)return chatPolicyCache.value;
+ try{const {data,error}=await db.rpc('chat_policy');if(error||!Number.isInteger(data?.days))return null;if(authUser?.id!==owner)return null;chatPolicyCache={owner,at:Date.now(),value:data};return data}catch{return null}
+}
+function scheduleChatRead(){clearTimeout(chatReadTimer);chatReadTimer=setTimeout(markVisibleChatRead,300)}
+async function markVisibleChatRead(){
+ if(chatReadBusy||document.hidden||!document.hasFocus()||state.page!=='messages'||(!authUser&&!demoMode))return;
+ const box=document.getElementById('chatBox'),clientId=chatClientId(selectedChatCustomer()),actor=chatActorId();if(!box||!clientId)return;
+ const area=box.getBoundingClientRect(),top=Math.max(area.top,0),bottom=Math.min(area.bottom,window.innerHeight);if(top>=bottom)return;
+ const visible=new Set(Array.from(box.querySelectorAll('[data-chat-message]')).filter(el=>{const r=el.getBoundingClientRect();return Math.min(r.bottom,bottom)-Math.max(r.top,top)>=Math.min(32,r.height)&&r.height>0}).map(el=>el.dataset.chatMessage));
+ const ids=chatRows.filter(m=>visible.has(String(m.id))&&m.sender_id!==actor&&!m.read_at).map(m=>m.id);if(!ids.length)return;
+ chatReadBusy=true;
+ try{const {data,error}=await chatData().read(clientId,ids);if(error)throw error;if(state.page!=='messages'||actor!==chatActorId()||clientId!==chatClientId(selectedChatCustomer()))return;for(const m of chatRows){const read=(data||[]).find(x=>x.id===m.id);if(read)m.read_at=read.read_at;else if(demoMode&&ids.includes(m.id))m.read_at=m.read_at||new Date().toISOString()}}
+ catch{const errorBox=document.getElementById('chatError');if(errorBox&&actor===chatActorId()&&clientId===chatClientId(selectedChatCustomer()))errorBox.textContent='Okundu bilgisi gönderilemedi; tekrar denenecek.'}
+ finally{chatReadBusy=false;if(state.page==='messages'&&actor===chatActorId()&&clientId===chatClientId(selectedChatCustomer())&&state.unread){state.unread[state.role]=chatRows.filter(m=>m.sender_id!==actor&&!m.read_at).length;renderNav()}}
+}
+window.addEventListener('focus',scheduleChatRead);
+window.addEventListener('scroll',scheduleChatRead,{passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)scheduleChatRead()});
+
 function chatClientId(c){return demoMode?String(c?.id):c?.dbId}
 function chatActorId(){return demoMode?(state.role==='pt'?'demo-pt':'demo-member-'+state.customer.id):authUser?.id}
 function demoChatStore(){
@@ -569,7 +595,7 @@ function chatLegacyMessages(c){return demoMode?(clientAccount(c).messages||[]):(
 const cloudChatData={
  messages:id=>db.from('messages').select('id,client_id,sender_id,sender_role,body,created_at,read_at,sticker').eq('client_id',id).order('created_at',{ascending:true}),
  tasks:id=>{const q=db.from('tasks').select('*');return (id?q.eq('client_id',id):q).order('due_at')},
- read:(id,ids)=>db.from('messages').update({read_at:new Date().toISOString()}).eq('client_id',id).in('id',ids),
+ read:(id,ids)=>db.from('messages').update({read_at:new Date().toISOString()}).eq('client_id',id).in('id',ids).is('read_at',null).select('id,read_at'),
  send:payload=>db.from('messages').insert(payload),
  assign:payload=>db.rpc('assign_chat_task',payload),
  complete:(t,payload)=>db.from('tasks').update(payload).eq('id',t.id).eq('client_id',t.client_id).select('id')
@@ -605,8 +631,9 @@ function liveMessages(){
  const c=selectedChatCustomer();if(c)state.chatCustomerId=c.id;
  const choices=state.role==='pt'?`<div class="field"><label for="chatCustomerSelect">Yazışılacak müşteri</label><select id="chatCustomerSelect">${visibleCustomers().map(x=>`<option value="${escapeHtml(String(x.id))}" ${c&&String(x.id)===String(c.id)?'selected':''}>${escapeHtml(x.name)}${x.archived?' (Arşiv)':''}</option>`).join('')}</select></div>`:'';
  const available=c&&!c.relationshipEndedAt&&(demoMode||state.role==='pt'||c.ptId);
- view.innerHTML=`<div class="toolbar"><div><h1>Mesajlar</h1><div class="muted">${state.role==='pt'?'Seçtiğin müşteriyle özel yazışma.':'Yalnızca kendi PT’inle yazışabilirsin.'}</div></div></div><div class="card" style="max-width:850px">${archiveViewToggle()}${choices}<h2 class="subTitle">${escapeHtml(state.role==='pt'?(c?.name||'Henüz müşteri yok'):(state.memberTrainer?.name||'PT’im'))}</h2><div class="chat" id="chatBox"></div><p id="chatError" role="status"></p>${available?chatComposerHtml():'<p>Yazışmak için önce PT bağlantısı kurulmalı.</p>'}</div>`;
+ view.innerHTML=`<div class="toolbar"><div><h1>Mesajlar</h1><div class="muted">${state.role==='pt'?'Seçtiğin müşteriyle özel yazışma.':'Yalnızca kendi PT’inle yazışabilirsin.'}</div></div></div><div class="card" style="max-width:850px">${archiveViewToggle()}${choices}<h2 class="subTitle">${escapeHtml(state.role==='pt'?(c?.name||'Henüz müşteri yok'):(state.memberTrainer?.name||'PT’im'))}</h2><p class="notice" id="chatRetentionNotice" role="status">Mesaj saklama süresi yükleniyor…</p><div class="chat" id="chatBox"></div><p id="chatError" role="status"></p>${available?chatComposerHtml():'<p>Yazışmak için önce PT bağlantısı kurulmalı.</p>'}</div>`;
  document.getElementById('chatCustomerSelect')?.addEventListener('change',e=>{state.chatCustomerId=e.target.value;chatRows=[];liveMessages()});
+ document.getElementById('chatBox').addEventListener('scroll',scheduleChatRead,{passive:true});
  if(available)bindChatComposer();
  if(c&&chatClientId(c))refreshLiveChat();
 }
@@ -614,22 +641,21 @@ async function refreshLiveChat(){
  if(state.page!=='messages'||(!authUser&&!demoMode))return;
  const c=selectedChatCustomer();if(!c||!chatClientId(c))return;
  const seq=++chatLoadSequence,clientId=chatClientId(c),actor=chatActorId();
- const {data,error}=await chatData().messages(clientId);
+ const [{data,error},policy]=await Promise.all([chatData().messages(clientId),loadChatPolicy()]);
  if(seq!==chatLoadSequence||state.page!=='messages'||chatClientId(selectedChatCustomer())!==clientId||chatActorId()!==actor)return;
  const errorBox=document.getElementById('chatError');if(error){if(errorBox)errorBox.textContent='Mesajlar yüklenemedi: '+error.message;return}
  const taskResult=await chatData().tasks(clientId);
  if(seq!==chatLoadSequence||state.page!=='messages'||chatClientId(selectedChatCustomer())!==clientId||chatActorId()!==actor)return;
  if(taskResult.error){if(errorBox)errorBox.textContent='Görevler yüklenemedi: '+taskResult.error.message;return}
- chatTaskRows=taskResult.data||[];chatRows=data||[];const box=document.getElementById('chatBox');if(!box)return;
+ chatTaskRows=taskResult.data||[];chatRows=(data||[]).filter(m=>!policy||!chatExpired(m,policy));const notice=document.getElementById('chatRetentionNotice');if(notice)notice.textContent=policy?`Mesajlar gönderildikten ${policy.days} gün sonra, görev fotoğrafları ise yüklendikten ${policy.days} gün sonra otomatik silinir. Temizlik saatte bir yapılır. Görev sonuçları ve ölçümler korunur.`:'Saklama süresi şu anda alınamadı. Yeniden denenecek.';const box=document.getElementById('chatBox');if(!box)return;
  const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<70;
- const legacy=chatLegacyMessages(c);
+ const legacy=chatLegacyMessages(c).filter(m=>!policy||!chatExpired(m,policy));
  const html=legacy.map(m=>`<div class="msg ${m.from===state.role?'me':'them'}">${escapeHtml(m.text||'')}<div class="small muted">Önceki yazışma</div></div>`).join('')+chatRows.map(liveChatMessageHtml).join('');
  if(box.innerHTML!==html){box.innerHTML=html||'<div class="empty">Henüz mesaj yok.</div>';if(atBottom)box.scrollTop=box.scrollHeight}
  bindChatTasks();
- if(errorBox&&!chatSending)errorBox.textContent='';
- const unread=chatRows.filter(m=>m.sender_id!==chatActorId()&&!m.read_at).map(m=>m.id);
- if(unread.length)await chatData().read(clientId,unread);
- if(state.unread){state.unread[state.role]=0;renderNav()}
+ if(errorBox&&!chatSending&&/^(Mesajlar|Görevler) yüklenemedi:/.test(errorBox.textContent))errorBox.textContent='';
+ scheduleChatRead();
+ if(state.unread){state.unread[state.role]=chatRows.filter(m=>m.sender_id!==actor&&!m.read_at).length;renderNav()}
 }
 const chatStickers=[{id:'water',emoji:'💧',label:'Su iç',type:'litre'},{id:'weigh',emoji:'⚖️',label:'Tartıl',type:'kg'},{id:'meal',emoji:'🥗',label:'Öğününü paylaş',type:'photo'},{id:'move',emoji:'🚶',label:'Hareket et',type:'done'},{id:'sleep',emoji:'🌙',label:'Uyku zamanı',type:'done'},{id:'cheer',emoji:'💪',label:'Harikasın!',type:'done'}];
 let chatSticker=null,chatDraftId=null,chatTaskRows=[],cloudTasks=[],taskLoadSequence=0,taskOwner=null,taskLoadError='';
@@ -665,8 +691,8 @@ function bindChatComposer(){
  document.getElementById('msgInput').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();sendLiveMessage()}};
 }
 function updateChatSticker(){const p=document.getElementById('chatStickerPreview');p.hidden=!chatSticker;p.innerHTML=chatSticker?stickerHtml(chatSticker)+'<button class="btn sm ghost" id="clearChatSticker">Sticker’ı kaldır</button>':'';document.getElementById('clearChatSticker')?.addEventListener('click',()=>{chatSticker=null;updateChatSticker()});view.querySelectorAll('[data-sticker]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sticker===chatSticker)))}
-function taskStatusHtml(t){const done=t.status==='done',late=!done&&t.due_at&&new Date(t.due_at)<new Date();return `<div class="chatTaskStatus"><span class="status ${done?'green':late?'amber':'gray'}">${done?'✓ Tamamlandı':late?'⏳ Gecikti':'◷ Bekliyor'}</span><div>Son tarih: ${t.due_at?new Date(t.due_at).toLocaleString('tr-TR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Belirtilmedi'}</div>${done?`<div>${escapeHtml(t.result||'Tamamlandı')}${t.response_type==='kg'?' kg':t.response_type==='litre'?' litre':''}</div>`:''}${t.result_photo&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(t.result_photo)?`<img class="taskPhoto" alt="Görev sonucu fotoğrafı" src="${t.result_photo}">`:''}</div>`}
-function liveChatMessageHtml(m){const t=chatTaskRows.find(t=>t.message_id===m.id);return `<div class="msg ${m.sender_id===chatActorId()?'me':'them'}">${t?'<div class="chatTaskLabel">GÖREV</div>':''}${stickerHtml(m.sticker)}<div>${escapeHtml(m.body||'')}</div>${t?taskStatusHtml(t):''}${t&&t.status!=='done'&&state.role==='member'?`<button class="btn primary sm" data-complete-task="${t.id}">${t.response_type==='done'?'Tamamladım':'Sonucu gir'}</button>`:!t&&state.role==='pt'&&m.sender_id===chatActorId()?`<button class="btn ghost sm" data-convert-task="${m.id}">Göreve dönüştür</button>`:''}<div class="small muted">${new Date(m.created_at).toLocaleString('tr-TR')}${m.sender_id===chatActorId()&&m.read_at?' · Okundu':''}</div></div>`}
+function taskStatusHtml(t){const done=t.status==='done',late=!done&&t.due_at&&new Date(t.due_at)<new Date();return `<div class="chatTaskStatus"><span class="status ${done?'green':late?'amber':'gray'}">${done?'✓ Tamamlandı':late?'⏳ Gecikti':'◷ Bekliyor'}</span><div>Son tarih: ${t.due_at?new Date(t.due_at).toLocaleString('tr-TR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Belirtilmedi'}</div>${done?`<div>${escapeHtml(t.result||'Tamamlandı')}${t.response_type==='kg'?' kg':t.response_type==='litre'?' litre':''}</div>`:''}${t.photo_expired_at?'<div class="small muted">Fotoğraf saklama süresi dolduğu için silindi.</div>':''}${t.result_photo&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(t.result_photo)?`<img class="taskPhoto" alt="Görev sonucu fotoğrafı" src="${t.result_photo}">`:''}</div>`}
+function liveChatMessageHtml(m){const t=chatTaskRows.find(t=>t.message_id===m.id);return `<div data-chat-message="${escapeHtml(m.id)}" class="msg ${m.sender_id===chatActorId()?'me':'them'}">${t?'<div class="chatTaskLabel">GÖREV</div>':''}${stickerHtml(m.sticker)}<div>${escapeHtml(m.body||'')}</div>${t?taskStatusHtml(t):''}${t&&t.status!=='done'&&state.role==='member'?`<button class="btn primary sm" data-complete-task="${t.id}">${t.response_type==='done'?'Tamamladım':'Sonucu gir'}</button>`:!t&&state.role==='pt'&&m.sender_id===chatActorId()?`<button class="btn ghost sm" data-convert-task="${m.id}">Göreve dönüştür</button>`:''}<div class="small muted">${new Date(m.created_at).toLocaleString('tr-TR')}${m.sender_id===chatActorId()?` · <span class="${m.read_at?'chatRead':'chatSent'}" ${m.read_at?`title="${escapeHtml(new Date(m.read_at).toLocaleString('tr-TR'))}"`:''}>${m.read_at?'✓✓ Okundu':'✓ Gönderildi'}</span>`:''}</div></div>`}
 function bindChatTasks(){view.querySelectorAll('[data-complete-task]').forEach(b=>b.onclick=()=>openCompleteTask(b.dataset.completeTask));view.querySelectorAll('[data-convert-task]').forEach(b=>b.onclick=()=>openConvertTask(b.dataset.convertTask))}
 async function loadLiveTasks(){if(!authUser&&!demoMode)return;const owner=chatActorId(),seq=++taskLoadSequence;if(taskOwner!==owner){cloudTasks=[];taskOwner=owner}const {data,error}=await chatData().tasks();if(chatActorId()!==owner||seq!==taskLoadSequence)return;if(error){taskLoadError='Görevler yüklenemedi. Sayfayı yenileyerek tekrar dene.';if(state.page==='progress'&&!adminMode)progress();return}taskLoadError='';cloudTasks=data||[];updateLiveTaskWidgets();if(state.page==='progress'&&!adminMode)progress()}
 function updateLiveTaskWidgets(){if(!authUser&&!demoMode)return;const counter=view.querySelector('[data-home-action="tasks"] .kpiVal');if(counter)counter.textContent=taskLoadError?'—':overdueTasks().length;const panel=document.getElementById('liveMemberTasks');if(panel){panel.innerHTML=memberTasksHtml();panel.querySelectorAll('[data-open-task-chat]').forEach(b=>b.onclick=()=>nav('messages'))}}
@@ -839,8 +865,8 @@ async function renderAdmin(){
    c.querySelectorAll('[data-restore-demo]').forEach(b=>b.onclick=async()=>{if(!confirm('Ortak demo bu sürüme dönsün mü?'))return;try{const current=await adminRpc('demo');await adminRpc('restore_demo',{id:Number(b.dataset.restoreDemo),version:current.version});await renderAdmin()}catch(e){toast(e.message)}});
   }
   else if(adminTab==='settings'){
-   c.innerHTML=`<form id="adminSettings"><p><label><input type="checkbox" id="registrationOpen" ${rows.registration_open?'checked':''}> Yeni kayıtları kabul et</label></p><p><label><input type="checkbox" id="maintenance" ${rows.maintenance?'checked':''}> Bakım modu</label></p><label for="announcement">Genel duyuru</label><textarea class="input" id="announcement" maxlength="1000">${e(rows.announcement)}</textarea><button class="btn primary">Kaydet</button></form>`;
-   c.querySelector('form').onsubmit=async ev=>{ev.preventDefault();try{await adminRpc('save_settings',{registration_open:c.querySelector('#registrationOpen').checked,maintenance:c.querySelector('#maintenance').checked,announcement:c.querySelector('#announcement').value});toast('Ayarlar kaydedildi.')}catch(err){view.querySelector('#adminError').textContent=err.message}};
+   c.innerHTML=`<form id="adminSettings"><p><label><input type="checkbox" id="registrationOpen" ${rows.registration_open?'checked':''}> Yeni kayıtları kabul et</label></p><p><label><input type="checkbox" id="maintenance" ${rows.maintenance?'checked':''}> Bakım modu</label></p><label for="announcement">Genel duyuru</label><textarea class="input" id="announcement" maxlength="1000">${e(rows.announcement)}</textarea><div class="field"><label for="chatRetentionDays">Mesaj ve fotoğraf saklama süresi (gün)</label><input class="input" type="number" id="chatRetentionDays" min="1" max="3650" step="1" required value="${Number(rows.chat_retention_days)||90}"></div><p class="small muted">Süre tüm PT ve müşteri sohbetlerinde geçerlidir. Süresi dolan mesajlar ve görev fotoğrafları saatlik temizlikte kalıcı olarak silinir. Süreyi kısaltmak mevcut eski içerikleri de etkiler; tekrar uzatmak silinenleri geri getirmez. Görev sonuçları ve ölçümler korunur.</p><button class="btn primary">Kaydet</button></form>`;
+   c.querySelector('form').onsubmit=async ev=>{ev.preventDefault();const days=Number(c.querySelector('#chatRetentionDays').value);if(!Number.isInteger(days)||days<1||days>3650){view.querySelector('#adminError').textContent='Saklama süresi 1–3650 gün olmalı.';return}if(days<(Number(rows.chat_retention_days)||90)&&!confirm(`Saklama süresi ${days} güne inecek. Daha eski mesaj ve fotoğraflar sonraki temizlikte kalıcı silinecek. Kaydedilsin mi?`))return;try{await adminRpc('save_settings',{registration_open:c.querySelector('#registrationOpen').checked,maintenance:c.querySelector('#maintenance').checked,announcement:c.querySelector('#announcement').value,chat_retention_days:days});rows.chat_retention_days=days;chatPolicyCache=null;toast('Ayarlar kaydedildi.')}catch(err){view.querySelector('#adminError').textContent=err.message}};
   }
   if(Array.isArray(rows)&&!rows.length)c.insertAdjacentHTML('beforeend','<p>Gösterilecek kayıt yok.</p>');
   c.querySelectorAll('[data-admin-action]').forEach(b=>b.onclick=async()=>{
