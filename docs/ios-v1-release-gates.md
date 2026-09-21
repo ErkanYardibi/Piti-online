@@ -27,7 +27,7 @@ kurulabilir bir sürüm henüz yok. Ana web yayını ve canlı veritabanı deği
 | Apple Developer hesabı | Hesabın varlığı ve Individual/Organization türü bilinmiyor. Marka/satıcı adı kararı ve gerekli yetki kullanıcıda. |
 | İmzalama | Team ID, doğrulanmış Bundle ID, push entitlement, sertifika/provisioning ve APNs anahtarı henüz ayarlanmadı. Anahtarlar sohbete veya Git'e konmaz. |
 | Ayrı STAGING | workers.dev CANLI ile aynı veriyi kullanıyor. Staging URL boş bırakıldı; canlıya otomatik geçiş yok. Frontend ve backend birlikte ayrılmalı. |
-| Xcode | Linux'ta Xcode yok. GitHub macOS derleme kontrolü eklendi; sonucu doğrulanmadan derlendi denmez. Simülatör derlemesi gerçek cihaz testi değildir. |
+| Xcode | GitHub macOS üzerinde Debug ve Release imzasız simülatör derlemeleri geçti; Staging Bundle ID/APNs ayrımı doğrulandı. Simülatör derlemesi gerçek cihaz testi değildir. |
 | Bildirimler | Gerçek cihazda foreground/background/cold start, izin reddi, logout, token değişimi, iki cihaz, iki kullanıcı ve demo izolasyonu doğrulanmalı. |
 | Kalan push olayları | Yaklaşan seans zamanlayıcısı, gecikeceğim olayı, PT seçili müşterilere manuel bildirim ve kategori tercihleri tamamlanmalı. |
 | Hesap silme | Sadece talep tablosu yeterli DEĞİL. Kullanıcı uygulama içinden başlatmalı; Auth, ilişkili kayıtlar, Storage ve saklama istisnaları gerçekten işlenmeli; tamamlanma bildirilmeli. Yapılmadan gönderilmez. |
@@ -59,8 +59,13 @@ migration uygular: RLS, yetkiler, oturum, alıcı, tekrar önleme, lease ve hesa
 değişimi test edilir. Bu, gerçek Supabase projesi ve tüm mevcut migration/admin
 script geçmişinin uçtan uca testi değildir. Canlı veritabanına bağlanmaz.
 
-Yeni Node push testleri (8 test), geçici Postgres testi ve mevcut self-password,
+Yeni Node push testleri (9 test), geçici Postgres testi ve mevcut self-password,
 demo-isolation, offline-guard testleri yerelde geçti. Mevcut
 `account-transition.test.cjs` içindeki 4 hata, eksik `navigator` test taklidi
 yüzünden oluşuyor; değiştirilmemiş `195fb2e` tabanında da aynı hatalar doğrulandı.
 Bu test dosyası değiştirilmedi ve bütün testler geçti iddiası yapılmıyor.
+
+Native derleme kanıtı: [GitHub Actions #1](https://github.com/ErkanYardibi/Piti-online/actions/runs/35635622637).
+Bu çalıştırma APNs'e gerçek bildirim göndermedi ve IPA/TestFlight oluşturmadı.
+Ana dalda sonradan eklenen mobil ana sayfa ve sohbet gezinme iyileştirmeleri
+(`565b01c`'ye kadar) iOS dalına çakışmasız alındı; bu işlem ana dalı değiştirmedi.

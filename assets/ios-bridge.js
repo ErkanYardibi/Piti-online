@@ -37,7 +37,7 @@
    try{await navigate(route);return true;}catch{return false;}
   };
   return {
-   ready(){leaving=false;post('ready');enqueueSync();},
+   ready(){leaving=false;registeredKey='';post('ready');enqueueSync();},
    async beforeLogout(){
     leaving=true;await serial.catch(()=>{});
     if(device?.token&&context().userId){

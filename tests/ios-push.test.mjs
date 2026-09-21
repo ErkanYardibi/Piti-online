@@ -79,3 +79,7 @@ test('routes wait for login, reject another recipient and arbitrary URL',async()
 test('denied permission disables existing registration',async()=>{
  const f=fixture();f.emit();await f.flush();f.emit({permission:'denied'});await f.flush();assert.equal(f.calls.at(-1)[0],'disable_push_device');
 });
+test('same account signing in again rebinds the device to its new server session',async()=>{
+ const f=fixture();f.emit();await f.flush();assert.equal(f.calls.length,1);
+ f.bridge.ready();await f.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[1][0],'register_push_device');
+});
