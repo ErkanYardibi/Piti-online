@@ -649,11 +649,11 @@ async function refreshLiveChat(){
  const taskResult=await chatData().tasks(clientId);
  if(seq!==chatLoadSequence||state.page!=='messages'||chatClientId(selectedChatCustomer())!==clientId||chatActorId()!==actor)return;
  if(taskResult.error){if(errorBox)errorBox.textContent='Görevler yüklenemedi: '+taskResult.error.message;return}
- chatTaskRows=taskResult.data||[];chatRows=(data||[]).filter(m=>!policy||!chatExpired(m,policy));await hydrateChatMedia(chatRows);if(seq!==chatLoadSequence||state.page!=='messages')return;const notice=document.getElementById('chatRetentionNotice');if(notice)notice.textContent=policy?`Mesajlar ve medyalar gönderildikten ${policy.days} gün sonra, görev fotoğrafları ise yüklendikten ${policy.days} gün sonra otomatik silinir. Temizlik saatte bir yapılır. Görev sonuçları ve ölçümler korunur.`:'Saklama süresi şu anda alınamadı. Yeniden denenecek.';const box=document.getElementById('chatBox');if(!box)return;
+ chatTaskRows=taskResult.data||[];chatRows=(data||[]).filter(m=>!policy||!chatExpired(m,policy));await hydrateChatMedia(chatRows);if(seq!==chatLoadSequence||state.page!=='messages'||chatActorId()!==actor||chatClientId(selectedChatCustomer())!==clientId)return;const notice=document.getElementById('chatRetentionNotice');if(notice)notice.textContent=policy?`Mesaj kayıtları gönderildikten ${policy.days} gün sonra, görev fotoğrafları ise yüklendikten ${policy.days} gün sonra otomatik silinir. Temizlik saatte bir yapılır. Görev sonuçları ve ölçümler korunur.`:'Saklama süresi şu anda alınamadı. Yeniden denenecek.';const box=document.getElementById('chatBox');if(!box)return;
  const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<70;
  const legacy=chatLegacyMessages(c).filter(m=>!policy||!chatExpired(m,policy));
  const html=legacy.map(m=>`<div class="msg ${m.from===state.role?'me':'them'}">${escapeHtml(m.text||'')}<div class="small muted">Önceki yazışma</div></div>`).join('')+chatRows.map(liveChatMessageHtml).join('');
- if(box.innerHTML!==html){box.innerHTML=html||'<div class="empty">Henüz mesaj yok.</div>';if(atBottom)box.scrollTop=box.scrollHeight}
+ if(box.dataset.renderedHtml!==html){box.dataset.renderedHtml=html;box.innerHTML=html||'<div class="empty">Henüz mesaj yok.</div>';if(atBottom)box.scrollTop=box.scrollHeight}
  bindChatTasks();
  if(errorBox&&!chatSending&&/^(Mesajlar|Görevler) yüklenemedi:/.test(errorBox.textContent))errorBox.textContent='';
  scheduleChatRead();
@@ -714,7 +714,7 @@ function updateChatMediaDraft(){
 }
 async function prepareChatDraft(factory){
  const error=document.getElementById('chatError'),tools=view.querySelectorAll('.chatTools button');tools.forEach(b=>b.disabled=true);if(error)error.textContent='Medya hazırlanıyor…';
- try{setChatMediaDraft(await factory());if(error)error.textContent=''}catch(e){if(error)error.textContent=e.message||'Medya hazırlanamadı.'}finally{tools.forEach(b=>b.disabled=false)}
+ const actor=chatActorId(),clientId=chatClientId(selectedChatCustomer());try{const draft=await factory();if(!error?.isConnected||chatActorId()!==actor||chatClientId(selectedChatCustomer())!==clientId)return;setChatMediaDraft(draft);if(error)error.textContent=''}catch(e){if(error)error.textContent=e.message||'Medya hazırlanamadı.'}finally{tools.forEach(b=>b.disabled=false)}
 }
 async function prepareChatPhoto(file){
  if(!file||!String(file.type).startsWith('image/'))throw Error('JPEG, PNG veya WebP fotoğraf seç.');if(file.size>20*1024*1024)throw Error('Fotoğraf en fazla 20 MB olabilir.');
@@ -727,9 +727,9 @@ async function prepareChatPhoto(file){
  }finally{URL.revokeObjectURL(url)}
 }
 async function videoMetadata(file){const url=URL.createObjectURL(file);try{const video=document.createElement('video');video.preload='metadata';video.muted=true;video.playsInline=true;await new Promise((ok,no)=>{video.onloadedmetadata=ok;video.onerror=()=>no(Error('Video açılamadı. MP4 veya WebM olarak tekrar dene.'));video.src=url});return {duration:video.duration,width:video.videoWidth,height:video.videoHeight}}finally{URL.revokeObjectURL(url)}}
-async function prepareChatVideo(file){
+async function prepareChatVideo(file,recordedDuration=null){
  if(!file||!String(file.type).startsWith('video/'))throw Error('MP4, WebM veya MOV video seç.');if(file.size>15*1024*1024)throw Error('Video en fazla 15 MB olabilir. Uygulama içinden SD video kaydedebilirsin.');
- const meta=await videoMetadata(file);if(!Number.isFinite(meta.duration)||meta.duration<=0)throw Error('Video süresi okunamadı.');if(meta.duration>60.5)throw Error('Video en fazla 60 saniye olabilir.');
+ const meta=await videoMetadata(file);if(recordedDuration!==null&&!Number.isFinite(meta.duration))meta.duration=recordedDuration;if(!Number.isFinite(meta.duration)||meta.duration<=0)throw Error('Video süresi okunamadı.');if(meta.duration>60.5)throw Error('Video en fazla 60 saniye olabilir.');
  const landscape=meta.width>=meta.height,maxW=landscape?854:480,maxH=landscape?480:854;if(meta.width>maxW||meta.height>maxH)throw Error('Seçilen video SD’den yüksek. “Video” düğmesiyle uygulama içinden SD video kaydet.');
  return {blob:file,message_type:'video',mime:canonicalMediaMime(file.type,'video'),width:meta.width,height:meta.height,duration:meta.duration};
 }
@@ -745,8 +745,8 @@ function openChatRecorder(kind){
  start.onclick=async()=>{start.disabled=true;error.textContent='';try{
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)throw Error('Bu cihaz doğrudan kayıt özelliğini desteklemiyor.');
   stream=await navigator.mediaDevices.getUserMedia(video?{audio:true,video:{width:{ideal:640,max:854},height:{ideal:480,max:480},facingMode:{ideal:'environment'},frameRate:{ideal:24,max:30}}}:{audio:true});
-  if(preview){preview.hidden=false;preview.srcObject=stream;await preview.play().catch(()=>{})}
-  const mime=supportedRecorderMime(kind),options=video?{videoBitsPerSecond:800000,audioBitsPerSecond:64000}:{audioBitsPerSecond:48000};if(mime)options.mimeType=mime;recorder=new MediaRecorder(stream,options);chunks=[];recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};recorder.onerror=()=>{error.textContent='Kayıt sırasında bir hata oluştu.'};recorder.onstop=async()=>{cleanup();if(cancelled)return;try{const blob=new Blob(chunks,{type:recorder.mimeType||mime||(video?'video/mp4':'audio/mp4')});let draft;if(video)draft=await prepareChatVideo(new File([blob],`piti-video.${mediaExtension(blob.type,'video')}`,{type:canonicalMediaMime(blob.type,'video')}));else{if(!blob.size)throw Error('Ses kaydı oluşmadı.');draft={blob,message_type:'audio',mime:canonicalMediaMime(blob.type,'audio'),duration:Math.min(limit,(Date.now()-started)/1000),width:null,height:null}}closeModal();setChatMediaDraft(draft)}catch(e){error.textContent=e.message;start.hidden=false;start.disabled=false;stop.hidden=true}};
+  if(cancelled||!start.isConnected){cleanup();return;}if(preview){preview.hidden=false;preview.srcObject=stream;await preview.play().catch(()=>{})}
+  const mime=supportedRecorderMime(kind),options=video?{videoBitsPerSecond:800000,audioBitsPerSecond:64000}:{audioBitsPerSecond:48000};if(mime)options.mimeType=mime;recorder=new MediaRecorder(stream,options);chunks=[];recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};recorder.onerror=()=>{error.textContent='Kayıt sırasında bir hata oluştu.'};recorder.onstop=async()=>{cleanup();if(cancelled)return;try{const blob=new Blob(chunks,{type:recorder.mimeType||mime||(video?'video/mp4':'audio/mp4')});let draft;if(video)draft=await prepareChatVideo(new File([blob],`piti-video.${mediaExtension(blob.type,'video')}`,{type:canonicalMediaMime(blob.type,'video')}),Math.min(limit,(Date.now()-started)/1000));else{if(!blob.size)throw Error('Ses kaydı oluşmadı.');draft={blob,message_type:'audio',mime:canonicalMediaMime(blob.type,'audio'),duration:Math.min(limit,(Date.now()-started)/1000),width:null,height:null}}closeModal();setChatMediaDraft(draft)}catch(e){error.textContent=e.message;start.hidden=false;start.disabled=false;stop.hidden=true}};
   recorder.start(500);started=Date.now();start.hidden=true;stop.hidden=false;clock=setInterval(()=>{const seconds=Math.min(limit,Math.floor((Date.now()-started)/1000));timer.textContent=mediaTime(seconds);if(seconds>=limit&&recorder.state==='recording')recorder.stop()},250);
  }catch(e){cleanup();error.textContent=e.message||'Mikrofon/kamera açılamadı.';start.disabled=false}};
  stop.onclick=()=>{stop.disabled=true;if(recorder?.state==='recording')recorder.stop()};
@@ -837,16 +837,17 @@ async function sendLiveMessage(){
  const task=state.role==='pt'&&document.getElementById('chatAsTask')?.checked,due=task?new Date(document.getElementById('chatDue').value):null;
  if(task&&media){document.getElementById('chatError').textContent='Medya normal mesaj olarak gönderilebilir. Görev için medyayı kaldır.';return}
  if(task&&(!Number.isFinite(+due)||due<=new Date())){document.getElementById('chatError').textContent='Gelecekte bir son tarih seç.';return}
- const clientId=chatClientId(c);chatSending=true;const button=document.getElementById('sendMsg');button.disabled=true;chatDraftId=chatDraftId||uuid();
+ const actor=chatActorId();const clientId=chatClientId(c);chatSending=true;const button=document.getElementById('sendMsg');button.disabled=true;chatDraftId=chatDraftId||uuid();
  let uploadedPath=null;
  try{
   const payload={id:chatDraftId,client_id:clientId,sender_id:chatActorId(),body:text||null,sticker:sticker||null,message_type:media?.message_type||'text'};
   if(media){if(demoMode){payload.media_url=media.preview_url;chatMediaDraft={...media,preview_url:null}}else{uploadedPath=await uploadChatMedia(media,clientId,chatDraftId);Object.assign(payload,{media_path:uploadedPath,media_mime:media.mime,media_size:media.blob.size,media_width:media.width||null,media_height:media.height||null,media_duration:media.duration?Math.round(media.duration*10)/10:null})}}
+  if(chatActorId()!==actor)throw Error('Hesap değişti. Gönderim iptal edildi.');
   const {error}=task?await chatData().assign({p_client_id:clientId,p_message_id:chatDraftId,p_body:text,p_sticker:sticker||null,p_due_at:due.toISOString(),p_response_type:document.getElementById('chatType').value,p_create_message:true}):await chatData().send(payload);if(error&&!(error.code==='23505'&&!task))throw error;
   if(chatClientId(selectedChatCustomer())===clientId&&input.isConnected){input.value='';chatSticker=null;chatDraftId=null;clearChatMediaDraft();updateChatSticker();const check=document.getElementById('chatAsTask');if(check){check.checked=false;document.getElementById('chatTaskFields').hidden=true;button.textContent='Gönder'}await Promise.all([refreshLiveChat(),loadLiveTasks()]);input.focus({preventScroll:true});syncMessageKeyboard()}
- }catch(e){if(uploadedPath)await db.storage.from('chat-media').remove([uploadedPath]).catch(()=>{});const target=document.getElementById('chatError');if(target)target.textContent='Gönderilemedi: '+e.message}finally{chatSending=false;if(button)button.disabled=false}
+ }catch(e){const target=document.getElementById('chatError');if(target)target.textContent='Gönderilemedi: '+e.message}finally{chatSending=false;if(button)button.disabled=false}
 }
-async function uploadChatMedia(draft,clientId,messageId){const ext=mediaExtension(draft.mime,draft.message_type),path=`${clientId}/${messageId}/${draft.message_type}.${ext}`,result=await db.storage.from('chat-media').upload(path,draft.blob,{contentType:draft.mime,cacheControl:'3600',upsert:false});if(result.error)throw result.error;return result.data.path}
+async function uploadChatMedia(draft,clientId,messageId){const ext=mediaExtension(draft.mime,draft.message_type),path=`${clientId}/${messageId}/${draft.message_type}.${ext}`,result=await db.storage.from('chat-media').upload(path,draft.blob,{contentType:draft.mime,cacheControl:'3600',upsert:false});if(result.error){if(String(result.error.statusCode)!=='409')throw result.error;return path;}return result.data.path}
 
 setInterval(()=>{if(authUser&&!demoMode&&!adminMode&&!document.hidden&&!document.getElementById('passwordGate'))loadLiveTasks().catch(()=>{})},15000);
 captureEntryLink();
@@ -2298,7 +2299,7 @@ function memberProfile(){const c=state.customer;view.innerHTML=`<div class="tool
 
 function openAddLocation(){openModal(`<h3>Salon / Lokasyon Ekle</h3><div class="field"><label>Salon adı</label><input class="input" id="locName" placeholder="Örn. FitLife Lara"></div><div class="field"><label>Adres / Bölge</label><input class="input" id="locAddr" placeholder="Lara, Antalya"></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveLoc">Ekle</button></div>`);modal.querySelector('#saveLoc').onclick=()=>{const n=modal.querySelector('#locName').value.trim();if(!n)return toast('Salon adını gir.');state.ptProfile.locations.push({id:Date.now(),name:n,address:modal.querySelector('#locAddr').value});save();closeModal();toast('Salon eklendi.');ptProfile()}}
 let activeChatRecorderCleanup=null;
-function openModal(html){modal.innerHTML=html;modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){activeChatRecorderCleanup?.();modalBack.classList.remove('show')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
+function openModal(html){activeChatRecorderCleanup?.();modal.innerHTML=html;modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){activeChatRecorderCleanup?.();modalBack.classList.remove('show')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
 function toast(t){const el=document.querySelector('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 function escapeHtml(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 document.querySelector('#avatar').onclick=()=>{if(adminMode){adminTab='profile';adminPage=0;renderAdmin()}else nav('profile')};
