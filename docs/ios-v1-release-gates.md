@@ -76,6 +76,12 @@ Hesap silme bağımlılıkları `account-deletion-scope.md` dosyasında kayıtl�
 Başlatma ekranı ve talep API'si eklendi; altı servis, dört ekran ve bir Postgres
 testi geçti. Bunlar kalıcı silme/geri yükleme testleri değildir.
 
+PT silindiğinde müşteri seans/ödeme geçmişinin salt okunur korunması kararı
+uygulama kapsamına alındı. Müşteriye özel arşiv yakalama/okuma katmanı ve PT'im
+ekranı eklendi; ayrı veritabanı ve ekran testleri geçti. Kalıcı temizleme motoruna
+bağlama, ilişki yazılarını durdurma ve yeni PT'ye bağlantıyı uçtan uca doğrulama
+hâlâ açık; canlıda özellik etkinleştirilmedi.
+
 Native derleme kanıtı: [GitHub Actions #1](https://github.com/ErkanYardibi/Piti-online/actions/runs/35635622637).
 Bu çalıştırma APNs'e gerçek bildirim göndermedi ve IPA/TestFlight oluşturmadı.
 Ana dalda sonradan eklenen mobil ana sayfa ve sohbet gezinme iyileştirmeleri

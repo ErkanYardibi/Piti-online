@@ -44,8 +44,11 @@ before any deployment; no deployment command was executed here.
 
 ## Remaining release work
 
-Determine treatment of shared PT–member session/payment history and legal
-retention. Implement the actual cleanup worker, identity/session freeze, Storage
+Shared-history decision: retain session/payment history for the member as
+read-only historical information. The member_retained_history migration and UI
+implement capture/read primitives, including former members and billing ledgers;
+they do not detach clients or perform cleanup. Determine legal retention periods.
+Implement the actual cleanup worker, identity/relationship write freeze, Storage
 cleanup, cross-account snapshot cleanup, incident/recovery-copy treatment and
 restoration protection. Implement completion receipt display after logout/app
 restart; current profile refresh can track a request while its account is active.

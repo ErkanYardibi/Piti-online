@@ -216,6 +216,7 @@ button{color:inherit}a{color:var(--blueText)}
 <script src="/assets/ios-bridge.js"></script>
 <script src="/assets/push-preferences.js"></script>
 <script src="/assets/account-deletion.js"></script>
+<script src="/assets/retained-history.js"></script>
 <script>
 (() => {
 const TR = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
@@ -2389,6 +2390,7 @@ function renderTransferControls(){
   const box=document.createElement('div');box.id='transferPanel';box.className='card';
   box.innerHTML='<h2 class="sectionTitle">PT değişikliği</h2><p>Yeni PT’nin verdiği geçiş kodunu kullan. Eski PT’nin onayı gerekmez; geçiş tamamlandığında bilgilendirilir.</p><button class="btn primary" id="openTransfer">PT değiştir</button><button class="btn ghost" id="pastTrainers">Önceki PT geçmişim</button>'+(demoMode?'<p class="small muted">Demo geçiş kodu: DEMO-PT-GECIS</p>':'');
   view.append(box);box.querySelector('#openTransfer').onclick=openTransferForm;box.querySelector('#pastTrainers').onclick=openTransferHistory;
+  window.PiTiRetainedHistory?.render({target:box,client:db,context:()=>({userId:authUser?.id,ready:!!authUser&&liveStateOwner===authUser.id&&!adminMode,demo:demoMode,role:state.role})});
  }
  if(demoMode&&demoPreviousTrainerState&&state.role==='pt'&&!document.querySelector('#demoTransferSwitch')){
   const b=document.createElement('button');b.id='demoTransferSwitch';b.className='btn ghost';b.textContent=state===demoPreviousTrainerState?'Yeni PT görünümüne geç':'Eski PT bildirimini gör';

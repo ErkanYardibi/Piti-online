@@ -39,10 +39,35 @@ süreyle tutulacağı henüz belirlenmedi. Bu belge bir yasal saklama süresi ve
 uygunluk iddiası oluşturmaz. Kullanıcıya gösterilecek silme açıklaması gerçek
 saklama uygulamasıyla eşleşmeden özellik yayına alınmamalı.
 
-Kalıcı temizleme motorunun ortak veri davranışı için açık karar: PT hesabı
-silindiğinde müşterilerdeki ortak seans/ödeme geçmişi korunacak mı? Müşterinin
-bağımsız Auth hesabının silinmemesi esastır. Bu karar, kişisel ölçümler ve ortak
-geçmişin hangi kayıtlarının temizleneceğini belirleyen uygulama planını değiştirir.
+## Ortak geçmiş kararı — 21 Eylül 2026
+
+Ürün sahibi kararı: PT hesabı silindiğinde müşterinin seans ve ödeme geçmişi
+tarihsel bilgi olarak korunacak. Müşterinin bağımsız hesabı korunur; yeni PT
+arşivi göremez. Arşiv, yeni ilişkiye paket/seans hakkı veya borç aktarmaz.
+
+`20260921190901_member_retained_history.sql` bu kararın arşiv katmanıdır.
+Sunucunun çağırabildiği yakalama işlemi yalnızca `processing` durumundaki,
+hesabı askıya alınmış PT silme işi için çalışır. Mevcut müşteriler ile daha önce
+PT değiştirmiş müşterilerin transfer snapshot'larını kapsar. Tekrarlanan çağrı
+aynı arşivi değiştirmez. Hesabı olmayan manuel müşteriye arşiv hesabı yaratmaz.
+
+Arşiv müşteri Auth hesabına bağlıdır, PT Auth hesabına bağlı değildir. Müşteri
+kendi hesabını sildiğinde kendi arşivi de silinir. Okuma RPC'si geçerli oturumla
+yalnızca çağıranın kayıtlarını döndürür; istemcilerin tabloya doğrudan okuma/yazma
+yetkisi yoktur. PT'im ekranında salt okunur, isteğe bağlı yüklenen görünüm vardır.
+
+Seans tarih/durumları, paketler, ödemeler, seans ücretleri, tahsilatlar, eski
+paket/ödeme özetleri izin verilen alanlarla alınır. PT profili, mesaj, sağlık
+ölçümü, serbest not/açıklama ve dekont/dosya yolu kopyalanmaz. Paket ve antrenman
+başlığı gibi kullanıcı metinleri yine kişisel bilgi içerebilir; bu alan seçimi
+tam anonimleştirme veya yasal uygunluk iddiası değildir.
+
+Bu katman kendi başına PT bağlantısını kesmez, yeni müşteri kaydı yaratmaz,
+hesap silmez ve talebi tamamlandı işaretlemez. Temizleme motoru arşivden önce
+ilişkiye ait tüm yazıları (müşterinin yazıları dahil) durdurmalı; arşiv sayısını
+doğrulamalı; eski transfer snapshot'larını ve diğer kopyaları temizlemeli; ardından
+müşteriyi yeni PT'ye bağlanabilir duruma getirmelidir. Bu bütünleşik akış ve
+Storage/yedek temizliği bitene kadar silme kabulü kapalı kalır.
 
 ## Bu aşamadaki doğrulama
 
@@ -51,6 +76,12 @@ Altı Edge Function testi, dört ekran testi ve geçici Postgres testi geçti.
 giriş veya silme yapılmadı. Testler yetki, oturum, yanlış hesap, tekrar, özet
 değişimi, gizli durum anahtarı, kapalı servis ve hatalı başarı mesajlarını kapsar.
 Gerçek dosya/veri temizleme ve yedekten geri yükleme testleri hâlâ açıktır.
+
+Ek arşiv testleri geçici PostgreSQL ve jsdom üzerinde geçti: mevcut/eski müşteri
+sahipliği, yeni PT'den izolasyon, tekrar, alan sınırları, tahsilatlar, PT Auth
+silindikten sonra korunma, müşteri silindiğinde yalnızca kendi arşivinin kalkması,
+iptal edilmiş oturum, ekran hesap değişimi ve güvenli metin gösterimi. Test
+şeması tüm canlı bağımlılıkları içermez; bu bir üretim hesabı silme testi değildir.
 
 ## Kabul testleri
 
