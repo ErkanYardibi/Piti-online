@@ -190,6 +190,7 @@ button{color:inherit}a{color:var(--blueText)}
 </div>
 <script src="/assets/offline-guard.js"></script>
 <script src="/vendor/supabase.min.js"></script>
+<script src="/assets/ios-bridge.js"></script>
 <script>
 (() => {
 const TR = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
@@ -202,6 +203,7 @@ const DEMO_URL='https://ldufxzwgwbaogpmwqhlw.supabase.co';
 const DEMO_KEY='sb_publishable_zmPhdwrGsRLY1B0XYb2ssg_8_qE67D7';
 const demoDb=window.supabase?.createClient(DEMO_URL,DEMO_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
 let authUser=null,cloudSyncTimer=null,demoMode=false;
+let nativeBridge=null;
 let liveStateOwner=null;
 const iso = d => { const x=new Date(d); x.setHours(12,0,0,0); return x.toISOString().slice(0,10); };
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
@@ -470,6 +472,7 @@ async function managedAccountRequest(body){
 async function checkAccountAccess(){const {data,error}=await db.rpc('account_context');if(error)throw error;if(!data?.session_valid)throw Error('Oturumun sona erdi. Yeniden giriş yap.');if(!['pt','member'].includes(data.role))throw Error('Hesap rolü bulunamadı.');accountAccess=data;return data}
 function renderSelfPasswordSettings(target){
  if(!target){if(adminMode||state.page!=='profile')return;target=view}
+ if(!adminMode&&typeof nativeBridge!=='undefined')nativeBridge?.renderSettings(target);
  if(target.querySelector('#selfPasswordForm'))return;
  const section=document.createElement('section');section.className='card';section.style.marginTop='18px';
  section.innerHTML=`<h2 class="sectionTitle">Şifremi değiştir</h2>${demoMode?'<p class="muted">DEMO hesabının ortak giriş şifresi değiştirilemez.</p>':`<form id="selfPasswordForm" style="max-width:440px"><div class="field"><label for="selfNewPassword">Yeni şifre</label><input class="input" id="selfNewPassword" type="password" autocomplete="new-password" minlength="6" required></div><div class="field"><label for="selfRepeatPassword">Yeni şifre tekrar</label><input class="input" id="selfRepeatPassword" type="password" autocomplete="new-password" minlength="6" required></div><p class="small muted">En az 6 karakter kullan.</p><p id="selfPasswordStatus" role="status" aria-live="polite"></p><button type="submit" class="btn primary">Şifremi değiştir</button></form>`}`;
@@ -990,7 +993,8 @@ function activateSession(session){
    document.querySelector('#roleSeg').hidden=true;
    document.querySelector('#resetBtn').hidden=true;
    updateBrandConnection();
-   if(!document.querySelector('#logoutBtn')){const out=document.createElement('button');out.className='pill';out.id='logoutBtn';out.textContent='Çıkış';out.onclick=async()=>{try{const {error}=await db.auth.signOut();if(error)throw error}catch(error){toast('Çıkış yapılamadı: '+error.message)}};document.querySelector('.userbox').append(out)}
+   if(!document.querySelector('#logoutBtn')){const out=document.createElement('button');out.className='pill';out.id='logoutBtn';out.textContent='Çıkış';out.onclick=async()=>{try{await nativeBridge?.beforeLogout();const {error}=await db.auth.signOut();if(error)throw error}catch(error){toast('Çıkış yapılamadı: '+error.message)}};document.querySelector('.userbox').append(out)}
+   nativeBridge?.ready();
    authMessage('');
    if(typeof openPendingClientInvite==='function')openPendingClientInvite();
   }catch(error){authUser=null;document.querySelector('#authBack').hidden=false;authMessage('Hesap yüklenemedi: '+error.message)}
@@ -2421,7 +2425,13 @@ function demoTransferRequest(action,args){
 }
 setInterval(async()=>{if(typeof authUser==='undefined'||!authUser||demoMode||adminMode||document.hidden)return;try{await loadTransferData();renderTransferNotices();}catch{}},30000);
 // END trainer transfer module
-render();maybeOpenJoinLink();initAuth();
+nativeBridge=window.PiTiIOSBridge?.create({window,client:db,context:()=>({userId:authUser?.id,ready:!!authUser&&liveStateOwner===authUser.id&&!adminMode,demo:demoMode}),navigate:async route=>{
+ const owner=authUser?.id;if(!owner||demoMode)return;
+ if(route.client_id){const c=financeCustomers().find(c=>String(c.dbId)===route.client_id&&!c.archived);if(!c)return;if(state.role==='pt'){state.chatCustomerId=c.id;state.financeCustomerId=c.id;}}
+ if(route.page==='calendar'&&route.entity_id){await loadCloudData();if(authUser?.id!==owner||demoMode)return;const e=state.events.find(e=>String(e.dbId||e.id)===route.entity_id);if(!e)return;state.selectedDate=e.date;state.calCursor=e.date;}
+ nav(route.page);
+}})||null;
+render();maybeOpenJoinLink();initAuth();nativeBridge?.ready();
 })();
 </script>
 </body>

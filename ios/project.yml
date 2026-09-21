@@ -1,0 +1,46 @@
+name: PiTi
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  PiTi:
+    type: application
+    platform: iOS
+    sources:
+      - path: PiTi
+        excludes:
+          - Resources/Info.plist
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Staging: Config/Staging.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        INFOPLIST_FILE: PiTi/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: PiTi/PiTi.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        PRODUCT_NAME: PiTi
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    scheme:
+      testTargets: []
+schemes:
+  PiTi-Staging:
+    build:
+      targets:
+        PiTi: all
+    run:
+      config: Debug
+    archive:
+      config: Staging

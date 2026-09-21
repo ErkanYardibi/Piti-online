@@ -1,0 +1,7 @@
+#include "Shared.xcconfig"
+PITI_BASE_URL = $(PITI_STAGING_URL)
+PRODUCT_BUNDLE_IDENTIFIER = online.mypiti.app.staging
+CODE_SIGN_ENTITLEMENTS = PiTi/PiTi.entitlements
+APS_ENVIRONMENT = development
+PITI_ENVIRONMENT = staging
+PITI_APNS_ENVIRONMENT = sandbox
