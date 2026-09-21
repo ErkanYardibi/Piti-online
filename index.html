@@ -158,6 +158,24 @@ button{color:inherit}a{color:var(--blueText)}
 @media(max-width:480px){.appearanceOptions{grid-template-columns:1fr}}
 .chatRead{color:var(--green2);font-weight:750}.chatSent{color:var(--muted)}
 .menuOrderSettings{margin-top:18px}.menuOrderList{list-style:none;padding:0;margin:18px 0}.menuOrderList li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.menuOrderLabel{display:flex;align-items:center;gap:10px;font-weight:650}.menuOrderArrows{display:flex;gap:8px;flex-shrink:0}.menuOrderArrows button{min-width:44px;min-height:44px}.menuOrderSettings button:disabled{opacity:.4;cursor:default}
+
+/* Keep intrinsic table widths inside their grid tracks, including on mobile. */
+.shell>*,.grid2>*,.grid4>*,.calendarWrap>*{min-width:0}
+.grid2{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}
+.tableWrap{max-width:100%}
+.homeShortcut>div{min-width:0;overflow-wrap:anywhere}
+@media(max-width:1050px){.grid2{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:720px){
+ .homeSessionsTable,.homeSessionsTable tbody{display:block;width:100%}
+ .homeSessionsTable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .homeSessionsTable tr{display:block;padding:10px 0;border-bottom:1px solid var(--line)}
+ .homeSessionsTable tr:last-child{border-bottom:0}
+ .homeSessionsTable td{display:block;border:0;padding:6px 0;overflow-wrap:anywhere;min-width:0}
+ .homeSessionsTable td[data-label]:not([data-label=""])::before{content:attr(data-label);display:block;font-size:12px;font-weight:650;color:var(--muted);margin-bottom:4px}
+ .homeSessionsTable .personCell>span{min-width:0;overflow-wrap:anywhere}
+ .homeSessionsTable .status,.homeSessionsTable .lateBadge{white-space:normal;max-width:100%}
+ .homeSessionsTable td:last-child{display:flex;gap:8px;flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
@@ -1278,7 +1296,7 @@ function dashboard(){view.innerHTML=`
  ${archiveViewToggle()}${appointmentAlertsHtml()}${resultAlertsHtml()}${delayAlertsHtml()}${nextEventHtml()}
  <div class="grid4">${homeKpi('PT Seansı',homeEvents().filter(e=>e.type==='session'&&e.date===iso(new Date())&&e.status!=='requested').length,'Bugün','sessions')}${homeKpi('Randevu Talebi',pendingAppointments().length,'Bekliyor','requests')}${homeKpi('Geciken Görev',overdueTasks().length,'Dikkat','tasks')}${homeKpi('Ödeme / Paket',pendingPayments().length,'Onay bekliyor','payments')}</div>
  <div class="grid2" style="margin-top:18px">
-  <div class="card"><h2 class="sectionTitle">Bugünkü Seanslar</h2><div class="tableWrap"><table class="table"><thead><tr><th>Saat</th><th>Müşteri</th><th>Plan</th><th>Durum</th><th></th></tr></thead><tbody>
+  <div class="card"><h2 class="sectionTitle">Bugünkü Seanslar</h2><div class="tableWrap"><table class="table homeSessionsTable"><thead><tr><th>Saat</th><th>Müşteri</th><th>Plan</th><th>Durum</th><th></th></tr></thead><tbody>
 
   ${homeEvents().filter(e=>e.type==='session'&&e.date===iso(new Date())).sort((a,b)=>eventStart(a)-eventStart(b)).map(e=>`<tr><td>${escapeHtml(eventTime(e))}</td><td><span class="personCell">${personAvatar(eventCustomer(e),eventCustomer(e)===state.customer.name&&state.customer.photo?state.customer.photo:'')}<span>${escapeHtml(eventCustomer(e))}</span></span></td><td>${escapeHtml(e.title)}</td><td>${hasDelay(e)?delayBadge(e):`<span class="status ${needsResult(e)?'amber':e.status==='completed'?'green':e.status==='noshow'?'amber':'blue'}">${statusText(e)}</span>`}</td><td>${needsResult(e)?resultActions(e):`<button class="btn sm ghost" data-home-date="${e.date}">Detay</button>`}</td></tr>`).join('')}
   </tbody></table></div></div>
@@ -1288,6 +1306,7 @@ function dashboard(){view.innerHTML=`
    <button type="button" class="hist homeShortcut" data-home-action="customers"><div><b>Aktif müşteri</b><div class="small muted">PT hesabındaki müşteri sayısı</div></div><span class="status green">${financeCustomers().filter(c=>!c.archived).length}</span></button>
   </div>
  </div>`;
+ view.querySelectorAll('.homeSessionsTable tbody tr').forEach(row=>Array.from(row.cells).forEach((cell,i)=>{cell.dataset.label=['Saat','Müşteri','Plan','Durum',''][i]}));
  bindHomeEvents();
  view.querySelectorAll('[data-home-action]').forEach(b=>b.onclick=()=>openHomeAction(b.dataset.homeAction));
  document.querySelector('#addAvail').onclick=()=>openAvailability();
