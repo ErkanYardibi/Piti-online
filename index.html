@@ -163,6 +163,10 @@ button{color:inherit}a{color:var(--blueText)}
 .shell>*,.grid2>*,.grid4>*,.calendarWrap>*{min-width:0}
 .grid2{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}
 .tableWrap{max-width:100%}
+.homeSessionsTable tbody tr[data-home-date]{cursor:pointer}
+.homeSessionsTable tbody tr[data-home-date]:hover{background:var(--hover)}
+.homeSessionsTable tbody tr[data-home-date]:focus-visible{outline:2px solid var(--green);outline-offset:-2px}
+.homeSessionsTable td:empty{display:none}
 .homeShortcut>div{min-width:0;overflow-wrap:anywhere}
 @media(max-width:1050px){.grid2{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:720px){
@@ -1229,7 +1233,7 @@ function nextEventHtml(){
  return `<section class="card homeEvent photoEvent"><div class="heroPhoto hero-${hero.model}" style="--hero-x:${(hero.index%3)*50}%;--hero-y:${Math.floor(hero.index/3)*100}%" aria-hidden="true"></div><div class="heroFade" aria-hidden="true"></div><div class="heroContent"><h2 class="sectionTitle">Sıradaki Etkinlik</h2><div class="homeEventTitle">${escapeHtml(member?'PT Antrenmanı':eventCustomer(e)||e.title)}</div><div class="homeEventSubtitle">${escapeHtml(e.title)}</div><div class="homeEventMeta">${formatDate(e.date)} · ${escapeHtml(eventTime(e))}${eventStart(e)<=Date.now()?' · Şu anda':''}</div>${muscleGroupsHtml(e.muscleGroups)}${e.location?`<div class="homeEventMeta">${escapeHtml(e.location)}</div>`:''}${delayBadge(e)}</div><button type="button" class="heroOpen" data-home-date="${e.date}" ${e.synthetic?'data-home-customer="true"':''} aria-label="${e.synthetic?'Müşteriyi gör':'Seansı takvimde gör'}"><span aria-hidden="true">›</span></button>${trainer}</section>${sessionPackageWarningHtml(e)}${previousSessionSummary(e.customerId,e.date)}`;
 }
 function delayAlertsHtml(){const events=homeEvents().filter(e=>hasDelay(e)&&e.date===iso(new Date())).sort((a,b)=>eventStart(a)-eventStart(b));return events.length?`<section class="latePanel" aria-label="Gecikme bildirimleri"><h2>◷ Gecikecek Müşteriler (${events.length})</h2>${events.map(e=>`<div class="lateRow"><div><b>${escapeHtml(e.delay.customerName||eventCustomer(e))} · ${Number(e.delay.minutes)} dk gecikecek</b><div class="lateDetail">${escapeHtml(e.time)} · ${escapeHtml(e.title)}<br>Tahmini varış: <b>${arrivalTime(e)}</b></div></div><button class="btn ghost" data-home-date="${e.date}">Seansı Gör</button></div>`).join('')}</section>`:'';}
-function bindHomeEvents(){bindResultActions();view.querySelectorAll('.heroTrainer').forEach(b=>b.onclick=()=>nav('trainer'));view.querySelectorAll('[data-home-date]').forEach(b=>b.onclick=()=>{if(b.dataset.homeCustomer)return nav('customers');state.selectedDate=b.dataset.homeDate;state.calCursor=new Date(b.dataset.homeDate.slice(0,7)+'-01T12:00:00').toISOString();nav('calendar');});}
+function bindHomeEvents(){bindResultActions();view.querySelectorAll('.heroTrainer').forEach(b=>b.onclick=()=>nav('trainer'));view.querySelectorAll('[data-home-date]').forEach(b=>b.onclick=event=>{if(event.target.closest('button,a,input,select,textarea')&&event.target.closest('button,a,input,select,textarea')!==b)return;if(b.dataset.homeCustomer)return nav('customers');state.selectedDate=b.dataset.homeDate;state.calCursor=new Date(b.dataset.homeDate.slice(0,7)+'-01T12:00:00').toISOString();nav('calendar');});}
 function appointmentAlertsHtml(){
  const requests=pendingAppointments();if(state.role!=='pt'||!requests.length)return '';
  return `<section id="appointmentAlerts" class="card" style="border-left:5px solid #d68a00;background:var(--amberSoft);margin-bottom:16px" aria-live="polite"><h2 class="sectionTitle">Randevu Talepleri (${requests.length})</h2><p class="small">Müşterilerin seans için onayını bekliyor.</p>${requests.map(e=>`<div class="hist"><div><b>${escapeHtml(eventCustomer(e))}</b><div class="small">${escapeHtml(formatShort(e.date))} · ${escapeHtml(eventTime(e))}</div><span class="status amber">Onay bekliyor</span></div><button class="btn sm primary" data-review-request="${escapeHtml(String(e.id))}">Talebi İncele</button></div>`).join('')}</section>`;
@@ -1298,7 +1302,7 @@ function dashboard(){view.innerHTML=`
  <div class="grid2" style="margin-top:18px">
   <div class="card"><h2 class="sectionTitle">Bugünkü Seanslar</h2><div class="tableWrap"><table class="table homeSessionsTable"><thead><tr><th>Saat</th><th>Müşteri</th><th>Plan</th><th>Durum</th><th></th></tr></thead><tbody>
 
-  ${homeEvents().filter(e=>e.type==='session'&&e.date===iso(new Date())).sort((a,b)=>eventStart(a)-eventStart(b)).map(e=>`<tr><td>${escapeHtml(eventTime(e))}</td><td><span class="personCell">${personAvatar(eventCustomer(e),eventCustomer(e)===state.customer.name&&state.customer.photo?state.customer.photo:'')}<span>${escapeHtml(eventCustomer(e))}</span></span></td><td>${escapeHtml(e.title)}</td><td>${hasDelay(e)?delayBadge(e):`<span class="status ${needsResult(e)?'amber':e.status==='completed'?'green':e.status==='noshow'?'amber':'blue'}">${statusText(e)}</span>`}</td><td>${needsResult(e)?resultActions(e):`<button class="btn sm ghost" data-home-date="${e.date}">Detay</button>`}</td></tr>`).join('')}
+  ${homeEvents().filter(e=>e.type==='session'&&e.date===iso(new Date())).sort((a,b)=>eventStart(a)-eventStart(b)).map(e=>`<tr data-home-date="${e.date}" tabindex="0" role="link" aria-label="${escapeHtml(eventCustomer(e))} · ${escapeHtml(eventTime(e))} · Seansı takvimde gör"><td>${escapeHtml(eventTime(e))}</td><td><span class="personCell">${personAvatar(eventCustomer(e),eventCustomer(e)===state.customer.name&&state.customer.photo?state.customer.photo:'')}<span>${escapeHtml(eventCustomer(e))}</span></span></td><td>${escapeHtml(e.title)}</td><td>${hasDelay(e)?delayBadge(e):`<span class="status ${needsResult(e)?'amber':e.status==='completed'?'green':e.status==='noshow'?'amber':'blue'}">${statusText(e)}</span>`}</td><td>${needsResult(e)?resultActions(e):''}</td></tr>`).join('')}
   </tbody></table></div></div>
   <div class="card"><h2 class="sectionTitle">PT Takibi</h2>
    <button type="button" class="hist homeShortcut" data-home-action="invites"><div><b>Bağlantı talepleri</b><div class="small muted">Onay bekleyen müşteri bağlantıları</div></div><span class="status ${(state.invite.pending||[]).some(x=>x.status==='pending')?'amber':'green'}">${(state.invite.pending||[]).filter(x=>x.status==='pending').length}</span></button>
@@ -1308,6 +1312,7 @@ function dashboard(){view.innerHTML=`
  </div>`;
  view.querySelectorAll('.homeSessionsTable tbody tr').forEach(row=>Array.from(row.cells).forEach((cell,i)=>{cell.dataset.label=['Saat','Müşteri','Plan','Durum',''][i]}));
  bindHomeEvents();
+ view.querySelectorAll('.homeSessionsTable tr[data-home-date]').forEach(row=>row.onkeydown=event=>{if(event.target===row&&(event.key==='Enter'||event.key===' ')){event.preventDefault();row.click()}});
  view.querySelectorAll('[data-home-action]').forEach(b=>b.onclick=()=>openHomeAction(b.dataset.homeAction));
  document.querySelector('#addAvail').onclick=()=>openAvailability();
  document.querySelector('#homeManualCustomer').onclick=openAddCustomer;
