@@ -64,6 +64,23 @@ final class WebContainerViewController: UIViewController, WKNavigationDelegate, 
     deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
     private func makeWebView() -> WKWebView {
         let config = WKWebViewConfiguration()
+        config.ignoresViewportScaleLimits = false
+        // Apply only inside the native app, on every main-frame page load.
+        let fixedViewport = WKUserScript(source: """
+        (() => {
+            let viewport = document.querySelector('meta[name="viewport"]');
+            if (!viewport) {
+                viewport = document.createElement('meta');
+                viewport.name = 'viewport';
+                document.head.appendChild(viewport);
+            }
+            const settings = (viewport.content || 'width=device-width').split(',')
+                .filter(value => !/^(initial-scale|minimum-scale|maximum-scale|user-scalable)\\s*=/i.test(value.trim()));
+            viewport.content = settings.concat(['initial-scale=1', 'minimum-scale=1',
+                'maximum-scale=1', 'user-scalable=no']).join(',');
+        })();
+        """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        config.userContentController.addUserScript(fixedViewport)
         config.userContentController.add(WeakScriptHandler(self), name: "pitiNative")
         config.allowsInlineMediaPlayback = true
         config.applicationNameForUserAgent = "PiTi-iOS/1.0"
@@ -73,6 +90,7 @@ final class WebContainerViewController: UIViewController, WKNavigationDelegate, 
         result.uiDelegate = self
         result.allowsBackForwardNavigationGestures = true
         result.scrollView.keyboardDismissMode = .interactive
+        result.scrollView.pinchGestureRecognizer?.isEnabled = false
         // No pull-to-refresh: it could discard an unsaved form.
         return result
     }
