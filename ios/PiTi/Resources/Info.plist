@@ -19,4 +19,5 @@
   <key>NSMicrophoneUsageDescription</key><string>PT veya müşterinle sesli mesaj paylaşabilmen için mikrofona erişim gerekir.</string>
   <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>online.mypiti.app</string><key>CFBundleURLSchemes</key><array><string>piti</string></array></dict></array>
   <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+  <key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 </dict></plist>
