@@ -50,9 +50,11 @@ An unsigned simulator build is useful evidence, but is not an installable IPA.
 
 ## Current blockers
 
-Apple membership/Team ID and signing access are unconfirmed. Staging URL is blank
-by design. No isolated staging backend or signed archive is verified. These are
-the next delivery gates; there is no credible installation date until resolved.
+On 22 September, the user confirmed a successful PiTi launch on a real iPhone 15
+from Xcode. A signed archive and TestFlight upload remain unverified. The approved
+shared DEMO/staging backend has now been bootstrapped and checked, but the staging
+frontend is not published; the iOS URL remains blank until it is verified.
+See [staging setup and remaining gates](staging-shared-demo.md).
 
 Sources checked 21 September 2026:
 - https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/

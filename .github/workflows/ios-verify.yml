@@ -22,6 +22,7 @@ jobs:
           export PITI_PGLITE_PATH="$RUNNER_TEMP/piti-test-tools/node_modules/@electric-sql/pglite"
           export PITI_JSDOM_PATH="$RUNNER_TEMP/piti-test-tools/node_modules/jsdom"
           node --test tests/ios-push.test.mjs
+          node --test tests/staging-bundle.test.mjs tests/managed-account-edge.test.mjs
           node tests/ios-push-db.cjs
           node tests/ios-push-preferences.cjs
           node tests/ios-push-preferences-db.cjs

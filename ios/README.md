@@ -10,7 +10,9 @@ Install Xcode and XcodeGen, then run:
 
 Open ios/PiTi.xcodeproj. PiTi-Staging archives with Staging configuration.
 Debug and Staging require a VERIFIED, isolated staging web URL; no live fallback.
-Do not use workers.dev as staging: it currently shares production data.
+Do not use piti-online.erkan-yardibi.workers.dev as staging: it shares production data.
+The approved staging backend now shares the separate DEMO project. See
+../docs/staging-shared-demo.md for its dedicated frontend deployment and verification.
 
 Create the ignored ios/Config/Local.xcconfig locally with a real developer team
 and the verified staging URL. For xcconfig HTTPS values use https:/$()/HOST.

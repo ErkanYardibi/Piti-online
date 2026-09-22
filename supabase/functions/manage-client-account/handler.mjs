@@ -1,7 +1,7 @@
 export function normalizeUsername(value){return String(value||'').trim().replace(/[ÇĞİÖŞÜçğıöşüI]/g,c=>({'Ç':'C','Ğ':'G','İ':'I','Ö':'O','Ş':'S','Ü':'U','ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u','I':'i'}[c])).toLowerCase()}
 // Native fetch only: no browser-admin SDK and no third-party runtime dependencies.
-export function createHandler({url,serviceKey,fetchImpl=fetch,cryptoImpl=crypto}) {
- const allowedOrigins=new Set(['https://mypiti.online','https://www.mypiti.online','https://mypiti-online.netlify.app','https://piti-online.erkan-yardibi.workers.dev']);
+export function createHandler({url,serviceKey,fetchImpl=fetch,cryptoImpl=crypto,origins=['https://mypiti.online','https://www.mypiti.online','https://mypiti-online.netlify.app','https://piti-online.erkan-yardibi.workers.dev']}) {
+ const allowedOrigins=new Set(origins);
  const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
  async function api(path,method='GET',body,token=serviceKey){
   const response=await fetchImpl(url+path,{method,headers:{apikey:serviceKey,Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(15000)});
@@ -109,4 +109,3 @@ export function createHandler({url,serviceKey,fetchImpl=fetch,cryptoImpl=crypto}
   }
  };
 }
-

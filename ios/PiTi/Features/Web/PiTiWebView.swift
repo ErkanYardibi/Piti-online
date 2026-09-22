@@ -84,9 +84,9 @@ final class WebContainerViewController: UIViewController, WKNavigationDelegate, 
         }
         status.isHidden = true; retry.isHidden = true; webView.isHidden = false
         if AppConfiguration.environment != "production" {
-            // Defense in depth: a staging frontend must never call live or shared DEMO data.
+            // Staging shares the approved DEMO project; production remains blocked.
             let rules = #"""
-            [{"trigger":{"url-filter":"^https://(objwhegswugyeibcnjfr|ldufxzwgwbaogpmwqhlw)\\.supabase\\.co/"},"action":{"type":"block"}}]
+            [{"trigger":{"url-filter":"^https://objwhegswugyeibcnjfr\\.supabase\\.co/"},"action":{"type":"block"}}]
             """#
             WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "piti-staging-isolation", encodedContentRuleList: rules) { [weak self] list, error in
                 guard let self else { return }
