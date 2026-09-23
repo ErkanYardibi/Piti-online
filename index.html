@@ -11,7 +11,7 @@
   --amber:#f59e0b; --red:#ef5350; --purple:#7c3aed; --shadow:0 10px 30px rgba(24,38,52,.08);
 }
 *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text)}
-button,input,select,textarea{font:inherit} button{cursor:pointer}
+button,input,select,textarea{font:inherit} button{cursor:pointer}.linkButton{border:0;background:none;color:var(--blue);padding:0;text-decoration:underline;cursor:pointer}
 .brandMark,.authLogo{white-space:nowrap}
 .brandPrefix{font-size:.55em;letter-spacing:-.04em;color:var(--green);margin-right:.08em}
 .brandConnection{font-size:.46em;font-weight:650;letter-spacing:-.02em;color:var(--green2);margin-left:.08em}
@@ -207,7 +207,7 @@ button{color:inherit}a{color:var(--blueText)}
   <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
   <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
   <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" required></div>
-  <p class="small muted">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan. Şifreni unuttuysan PT’nden sıfırlamasını iste.</p><div class="authError" id="authError" role="alert"></div>
+  <p class="small muted">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan.</p><p class="small"><button class="linkButton" id="forgotPasswordBtn" type="button">Şifremi unuttum</button></p><div class="authError" id="authError" role="alert"></div>
   <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button></div>
  </form>
 </div>
@@ -1038,9 +1038,25 @@ function updateBrandConnection(){
 window.addEventListener('online',updateBrandConnection);
 window.addEventListener('offline',updateBrandConnection);
 updateBrandConnection();
+function recoveryLinkDetected(){
+ const params=new URLSearchParams(location.hash.replace(/^#/,''));
+ return params.get('type')==='recovery'||new URLSearchParams(location.search).get('passwordReset')==='1';
+}
+function showRecoveryPasswordGate(){
+ if(document.querySelector('#recoveryPasswordModal'))return;
+ openModal(`<div id="recoveryPasswordModal"><h3>Yeni şifre belirle</h3><p class="muted">Hesabın için yeni bir şifre oluştur.</p><div class="field"><label for="recoveryPassword">Yeni şifre *</label><input class="input" id="recoveryPassword" type="password" minlength="6" autocomplete="new-password" required></div><div class="field"><label for="recoveryPasswordAgain">Yeni şifre (tekrar) *</label><input class="input" id="recoveryPasswordAgain" type="password" minlength="6" autocomplete="new-password" required></div><p id="recoveryError" class="authError" role="alert"></p><div class="modalFoot"><button class="btn primary" id="saveRecoveryPassword">Şifreyi kaydet</button></div></div>`);
+ const save=document.querySelector('#saveRecoveryPassword'),error=document.querySelector('#recoveryError');
+ save.onclick=async()=>{const password=document.querySelector('#recoveryPassword').value,again=document.querySelector('#recoveryPasswordAgain').value;if(password.length<6){error.textContent='Şifre en az 6 karakter olmalı.';return}if(password!==again){error.textContent='Şifreler eşleşmiyor.';return}save.disabled=true;save.textContent='Kaydediliyor…';try{const {error:err}=await db.auth.updateUser({password});if(err)throw err;sessionStorage.removeItem('pitiRecoveryPending');sessionStorage.setItem('pitiResetDone','1');await db.auth.signOut({scope:'local'});location.replace(location.pathname+'?reset=done')}catch(err){error.textContent=err.message||'Şifre güncellenemedi.';save.disabled=false;save.textContent='Şifreyi kaydet'}};
+}
+async function openForgotPassword(){
+ const email=window.prompt('Şifre sıfırlama bağlantısının gönderileceği e-posta adresi:','');
+ if(email===null)return;
+ const value=email.trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(value)){authMessage('Geçerli bir e-posta adresi gir.');return}
+ setAuthBusy(true);authMessage('');try{const {error}=await db.auth.resetPasswordForEmail(value,{redirectTo:location.origin+location.pathname+'?passwordReset=1'});if(error)throw error;authMessage('Şifre sıfırlama bağlantısı e-posta adresine gönderildi.')}catch(error){authMessage(error.message||'Şifre sıfırlama e-postası gönderilemedi.')}finally{setAuthBusy(false)}
+}
 async function initAuth(){
  let registering=false;
- const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
+ const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#forgotPasswordBtn').hidden=registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
 
  const enterDemo=async()=>{demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
  document.querySelector('#authForm').onsubmit=async e=>{
@@ -1050,10 +1066,15 @@ async function initAuth(){
  };
  if(db)db.rpc('app_settings').then(({data,error})=>{if(error||!data)return;const n=document.createElement('p');n.className='muted';n.textContent=[data.announcement,data.maintenance?'Uygulama bakımda.':''].filter(Boolean).join(' ');document.querySelector('#authForm').prepend(n);if(!data.registration_open)document.querySelector('#signUpBtn').hidden=true;});
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
+ document.querySelector('#forgotPasswordBtn').onclick=openForgotPassword;
+ document.querySelector('#forgotPasswordBtn').hidden=false;
+ if(sessionStorage.getItem('pitiResetDone')){sessionStorage.removeItem('pitiResetDone');setTimeout(()=>authMessage('Şifren yenilendi. Yeni şifrenle giriş yapabilirsin.'),0)}
+ if(recoveryLinkDetected())sessionStorage.setItem('pitiRecoveryPending','1');
  // Supabase calls must run after the auth callback releases its session lock.
  db.auth.onAuthStateChange((event,session)=>{
-  if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
-  else if(session&&!authUser&&!demoMode)setTimeout(()=>{if(!authUser&&!demoMode&&!sessionStorage.getItem('pitiEntryToken'))activateSession(session)},0);
+  if(event==='PASSWORD_RECOVERY'){sessionStorage.setItem('pitiRecoveryPending','1');setTimeout(showRecoveryPasswordGate,0)}
+  else if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
+  else if(session&&!authUser&&!demoMode&&!sessionStorage.getItem('pitiRecoveryPending'))setTimeout(()=>{if(!authUser&&!demoMode&&!sessionStorage.getItem('pitiEntryToken')&&!sessionStorage.getItem('pitiRecoveryPending'))activateSession(session)},0);
  });
  document.querySelector('#signUpBtn').onclick=switchMode;
  const registerAccount=async()=>{
@@ -1064,7 +1085,7 @@ async function initAuth(){
   catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
  };
  if(typeof redeemPendingEntry==='function'&&await redeemPendingEntry())return;
- try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data.session)await activateSession(data.session)}
+ try{const {data,error}=await db.auth.getSession();if(error)throw error;if(sessionStorage.getItem('pitiRecoveryPending')){if(data.session)showRecoveryPasswordGate()}else if(data.session)await activateSession(data.session)}
  catch(error){authMessage('Oturum kontrol edilemedi: '+error.message)}
 }
 function packageEnd(pkg){return pkg?.expireDate||pkg?.end||''}
@@ -1441,13 +1462,13 @@ function openExistingCustomer(){
  };
 }
 function openManualCustomer(){
- openModal(`<h3>Müşteri ekle</h3><div class="notice">Ad, soyad, kullanıcı adı ve geçici şifre yeterli. Müşteri ilk girişte kendi şifresini belirler.</div><div class="grid2"><div class="field"><label for="mcFirstName">Ad *</label><input class="input" id="mcFirstName" maxlength="80" autocomplete="given-name" required></div><div class="field"><label for="mcLastName">Soyad *</label><input class="input" id="mcLastName" maxlength="79" autocomplete="family-name" required></div></div><div class="field"><label for="mcUsername">Kullanıcı adı *</label><input class="input" id="mcUsername" maxlength="30" autocomplete="off" placeholder="Örn. musteri1" required><div class="small muted">3–30 karakter. Harf, rakam, nokta, alt çizgi veya tire. Türkçe harfler sadeleştirilir.</div></div><div class="field"><label for="mcInitialPassword">Geçici şifre * (en az 6 karakter)</label><input class="input" id="mcInitialPassword" type="password" autocomplete="new-password" minlength="6" required></div><details><summary>Diğer bilgiler (isteğe bağlı)</summary><div class="field"><label for="mcPhone">Telefon</label><input class="input" id="mcPhone" type="tel" autocomplete="tel"></div><div class="field"><label for="mcEmail">E-posta</label><input class="input" id="mcEmail" type="email" autocomplete="email"></div><div class="grid2"><div class="field"><label for="mcBlood">Kan grubu</label><select id="mcBlood"><option value="">Seçiniz</option>${['A+','A-','B+','B-','AB+','AB-','0+','0-'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label for="mcGender">Cinsiyet</label><select id="mcGender"><option value="">Seçiniz</option>${['Kadın','Erkek','Belirtmek istemiyor'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label for="mcWeight">Kilo (kg)</label><input class="input" id="mcWeight" type="number" min="0.1" max="700" step="0.1"></div><div class="field"><label for="mcHeight">Boy (cm)</label><input class="input" id="mcHeight" type="number" min="1" max="300"></div></div></details><p id="mcError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveManualCustomer">Müşteriyi ve hesabını oluştur</button></div>`);
+ openModal(`<h3>Müşteri ekle</h3><div class="notice">Müşteri hesabını kurtarabilmek için gerçek ve erişilebilir bir e-posta adresi zorunludur.</div><div class="grid2"><div class="field"><label for="mcFirstName">Ad *</label><input class="input" id="mcFirstName" maxlength="80" autocomplete="given-name" required></div><div class="field"><label for="mcLastName">Soyad *</label><input class="input" id="mcLastName" maxlength="79" autocomplete="family-name" required></div></div><div class="field"><label for="mcUsername">Kullanıcı adı *</label><input class="input" id="mcUsername" maxlength="30" autocomplete="off" placeholder="Örn. musteri1" required><div class="small muted">3–30 karakter. Harf, rakam, nokta, alt çizgi veya tire. Türkçe harfler sadeleştirilir.</div></div><div class="field"><label for="mcEmail">E-posta *</label><input class="input" id="mcEmail" type="email" autocomplete="email" required><div class="small muted">Şifre sıfırlama bağlantısı bu adrese gönderilir.</div></div><div class="field"><label for="mcInitialPassword">Geçici şifre * (en az 6 karakter)</label><input class="input" id="mcInitialPassword" type="password" autocomplete="new-password" minlength="6" required></div><details><summary>Diğer bilgiler (isteğe bağlı)</summary><div class="field"><label for="mcPhone">Telefon</label><input class="input" id="mcPhone" type="tel" autocomplete="tel"></div><div class="grid2"><div class="field"><label for="mcBlood">Kan grubu</label><select id="mcBlood"><option value="">Seçiniz</option>${['A+','A-','B+','B-','AB+','AB-','0+','0-'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label for="mcGender">Cinsiyet</label><select id="mcGender"><option value="">Seçiniz</option>${['Kadın','Erkek','Belirtmek istemiyor'].map(x=>`<option>${x}</option>`).join('')}</select></div><div class="field"><label for="mcWeight">Kilo (kg)</label><input class="input" id="mcWeight" type="number" min="0.1" max="700" step="0.1"></div><div class="field"><label for="mcHeight">Boy (cm)</label><input class="input" id="mcHeight" type="number" min="1" max="300"></div></div></details><p id="mcError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveManualCustomer">Müşteriyi ve hesabını oluştur</button></div>`);
  modal.querySelector('#mcUsername').onblur=e=>{e.target.value=normalizeLoginName(e.target.value)};
  modal.querySelector('#saveManualCustomer').onclick=async()=>{
   const button=modal.querySelector('#saveManualCustomer'),err=modal.querySelector('#mcError');if(button.disabled)return;err.textContent='';
   const read=id=>modal.querySelector('#'+id).value.trim(),first=read('mcFirstName'),last=read('mcLastName'),username=normalizeLoginName(read('mcUsername')),password=modal.querySelector('#mcInitialPassword').value;
   const fields={phone:read('mcPhone'),email:read('mcEmail'),blood:read('mcBlood'),gender:read('mcGender'),weight:read('mcWeight'),height:read('mcHeight')};
-  if(!first||!last){err.textContent='Ad ve soyad gerekli.';return}if(!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)){err.textContent='Geçerli bir kullanıcı adı gir (3–30 karakter).';return}if(password.length<6){err.textContent='Geçici şifre en az 6 karakter olmalı.';return}const validation=optionalProfileError(fields);if(validation){err.textContent=validation;return}
+  if(!first||!last){err.textContent='Ad ve soyad gerekli.';return}if(!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)){err.textContent='Geçerli bir kullanıcı adı gir (3–30 karakter).';return}if(password.length<6){err.textContent='Geçici şifre en az 6 karakter olmalı.';return}if(!/^\S+@\S+\.\S+$/.test(fields.email)){err.textContent='Müşteri için geçerli bir e-posta adresi gerekli.';return}const validation=optionalProfileError(fields);if(validation){err.textContent=validation;return}
   if(!authUser||demoMode){err.textContent='Gerçek hesap oluşturmak için PT hesabınla giriş yap.';return}
   button.disabled=true;button.textContent='Oluşturuluyor…';
   try{
