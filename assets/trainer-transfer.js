@@ -37,7 +37,7 @@ function renderTransferControls(){
   view.querySelectorAll('[data-archive-customer],[data-delete-customer]').forEach(b=>{const id=b.dataset.archiveCustomer||b.dataset.deleteCustomer;if(financeCustomers().find(c=>String(c.id)===id)?.relationshipEndedAt){b.disabled=true;b.title='Sona ermiş PT ilişkisi salt okunurdur.';}});
  }
  if(state.role==='pt'&&['customers','invites'].includes(state.page)&&!document.querySelector('#inviteTransfer')){
-  const b=document.createElement('button');b.id='inviteTransfer';b.className='btn ghost';b.textContent='Başka PT’deki müşteriyi davet et';b.onclick=openTransferInvite;view.prepend(b);
+  const b=document.createElement('button');b.id='inviteTransfer';b.className='btn ghost';b.textContent='Başka PT’deki öğrenciyi davet et';b.onclick=openTransferInvite;view.prepend(b);
  }
  if(state.role==='member'&&state.page==='trainer'&&!document.querySelector('#transferPanel')){
   const box=document.createElement('div');box.id='transferPanel';box.className='card';
@@ -50,10 +50,10 @@ function renderTransferControls(){
  }
 }
 function openTransferInvite(){
- openModal('<h3>PT geçiş daveti</h3><p>Müşterinin mevcut PiTi kullanıcı adını gir. Yeni hesap veya şifre oluşturulmaz.</p><label>Kullanıcı adı</label><input class="input" id="transferUsername" autocomplete="off"><p id="transferError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="createTransfer">Davet oluştur</button></div>');
+ openModal('<h3>PT geçiş daveti</h3><p>Öğrencinin mevcut PiTi kullanıcı adını gir. Yeni hesap veya şifre oluşturulmaz.</p><label>Kullanıcı adı</label><input class="input" id="transferUsername" autocomplete="off"><p id="transferError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="createTransfer">Davet oluştur</button></div>');
  document.querySelector('#createTransfer').onclick=async()=>{const b=document.querySelector('#createTransfer');b.disabled=true;try{
   const result=await transferRequest('create',{username:document.querySelector('#transferUsername').value.trim()});
-  openModal(`<h3>Geçiş daveti hazır</h3><p>Bu kodu müşterinle paylaş. Müşteri kendi hesabında PT’im → PT değiştir bölümünden onaylar. Kod 7 gün geçerli ve tek kullanımlıktır.</p><input class="input" id="transferCodeCopy" readonly value="${escapeHtml(result.code)}"><div class="modalFoot"><button class="btn primary" id="copyTransferCode">Kodu kopyala</button><button class="btn ghost" data-close>Kapat</button></div>`);
+  openModal(`<h3>Geçiş daveti hazır</h3><p>Bu kodu öğrencinle paylaş. Öğrenci kendi hesabında PT’im → PT değiştir bölümünden onaylar. Kod 7 gün geçerli ve tek kullanımlıktır.</p><input class="input" id="transferCodeCopy" readonly value="${escapeHtml(result.code)}"><div class="modalFoot"><button class="btn primary" id="copyTransferCode">Kodu kopyala</button><button class="btn ghost" data-close>Kapat</button></div>`);
   document.querySelector('#copyTransferCode').onclick=()=>copyText(result.code);
  }catch(e){document.querySelector('#transferError').textContent=e.message;b.disabled=false;}};
 }

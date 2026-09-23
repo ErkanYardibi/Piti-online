@@ -31,7 +31,7 @@
     const result=await request({action:'preview'});if(!active())return;preview=result;details.hidden=false;
     const s=result.summary;
     if(!s||!['pt','member'].includes(s.role))throw Error('Silme özeti doğrulanamadı.');
-    section.querySelector('[data-delete-summary]').textContent=(s.role==='pt'?'PT hesabı':'Müşteri hesabı')+' · İlişkili müşteri kaydı: '+Number(s.client_records||0)+' · PT geçiş kaydı: '+Number(s.past_transfers||0);
+    section.querySelector('[data-delete-summary]').textContent=(s.role==='pt'?'PT hesabı':'Öğrenci hesabı')+' · İlişkili öğrenci kaydı: '+Number(s.client_records||0)+' · PT geçiş kaydı: '+Number(s.past_transfers||0);
     section.querySelector('[data-delete-notice]').textContent=result.notice||'Silme kapsamı henüz yayımlanmadı.';
     statusButton.hidden=true;
     if(result.request){showStatus(result.request);return;}

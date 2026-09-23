@@ -7,7 +7,7 @@ try{
  w.testRun("demoMode=true;authUser=null;state=clone(window.fixture);state.role='pt';state.events=[];state.page='calendar';state.selectedDate='2099-09-02';state.calCursor='2099-09-01T12:00:00';financeCustomers()[1].archived=true;window.first=String(financeCustomers()[0].id);window.second=String(financeCustomers()[2].id);openAvailability()");
  const checks=[...d.querySelectorAll('[data-audience-client]')];assert.equal(checks.length,w.testRun("financeCustomers().filter(c=>!c.archived&&!c.relationshipEndedAt).length"));
  d.querySelector('#saveAvail').click();assert.equal(w.testRun('state.events.length'),0,'selected-empty must not save');
- checks[0].checked=true;checks[0].dispatchEvent(new w.Event('change'));assert.equal(d.querySelector('#audienceCount').textContent,'1 müşteri seçildi');
+ checks[0].checked=true;checks[0].dispatchEvent(new w.Event('change'));assert.equal(d.querySelector('#audienceCount').textContent,'1 öğrenci seçildi');
  d.querySelector('#audienceSearch').value='no such client';d.querySelector('#audienceSearch').dispatchEvent(new w.Event('input'));assert.ok([...d.querySelectorAll('[data-audience-row]')].every(r=>r.style.display==='none'));
  d.querySelector('#aEndDate').value='2099-09-04';d.querySelector('#saveAvail').click();
  assert.equal(w.testRun('state.events.length'),3);assert.equal(w.testRun("state.events.every(e=>e.type==='availability'&&e.visibility==='selected'&&e.visibleCustomerIds.length===1)"),true);
