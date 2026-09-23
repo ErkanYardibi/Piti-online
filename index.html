@@ -1055,6 +1055,8 @@ async function openForgotPassword(){
 }
 async function initAuth(){
  let registering=false;
+ const forgotButton=document.querySelector('#forgotPasswordBtn');
+ if(forgotButton){forgotButton.onclick=openForgotPassword;forgotButton.hidden=false;}
  const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#forgotPasswordBtn').hidden=registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
 
  const enterDemo=async()=>{demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
@@ -1065,8 +1067,6 @@ async function initAuth(){
  };
  if(db)db.rpc('app_settings').then(({data,error})=>{if(error||!data)return;const n=document.createElement('p');n.className='muted';n.textContent=[data.announcement,data.maintenance?'Uygulama bakımda.':''].filter(Boolean).join(' ');document.querySelector('#authForm').prepend(n);if(!data.registration_open)document.querySelector('#signUpBtn').hidden=true;});
  if(!db){authMessage('Bağlantı yüklenemedi. Demo modunu kullanabilirsin.');return}
- document.querySelector('#forgotPasswordBtn').onclick=openForgotPassword;
- document.querySelector('#forgotPasswordBtn').hidden=false;
  if(sessionStorage.getItem('pitiResetDone')){sessionStorage.removeItem('pitiResetDone');setTimeout(()=>authMessage('Şifren yenilendi. Yeni şifrenle giriş yapabilirsin.'),0)}
  if(recoveryLinkDetected())sessionStorage.setItem('pitiRecoveryPending','1');
  // Supabase calls must run after the auth callback releases its session lock.
