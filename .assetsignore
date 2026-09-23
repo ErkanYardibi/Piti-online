@@ -7,3 +7,7 @@ wrangler.jsonc
 worker.js
 .assetsignore
 .gitignore
+ios/
+docs/
+scripts/
+.github/

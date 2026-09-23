@@ -1,0 +1,7 @@
+Config/Local.xcconfig
+*.xcodeproj/
+build/
+DerivedData/
+*.p8
+*.p12
+*.mobileprovision

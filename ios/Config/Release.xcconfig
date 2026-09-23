@@ -1,0 +1,7 @@
+#include "Shared.xcconfig"
+PITI_BASE_URL = $(PITI_PRODUCTION_URL)
+PRODUCT_BUNDLE_IDENTIFIER = online.mypiti.app
+CODE_SIGN_ENTITLEMENTS = PiTi/PiTi.entitlements
+APS_ENVIRONMENT = production
+PITI_ENVIRONMENT = production
+PITI_APNS_ENVIRONMENT = production

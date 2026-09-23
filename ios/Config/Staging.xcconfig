@@ -1,0 +1,6 @@
+#include "Shared.xcconfig"
+PITI_BASE_URL = $(PITI_STAGING_URL)
+PITI_ENVIRONMENT = staging
+PITI_APNS_ENVIRONMENT = production
+APS_ENVIRONMENT = production
+PRODUCT_BUNDLE_IDENTIFIER = online.mypiti.app.staging

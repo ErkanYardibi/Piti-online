@@ -1,0 +1,58 @@
+name: iOS source verification
+on:
+  push:
+    branches: [feature/ios-v1]
+    paths: ['ios/**', 'index.html', 'assets/ios-bridge.js', 'assets/push-preferences.js', 'assets/account-deletion.js', 'assets/retained-history.js', 'tests/ios-*', 'tests/account-deletion*', 'tests/fixtures/ios-*', 'supabase/migrations/**', 'supabase/functions/send-push/**', 'supabase/functions/delete-account/**', '.github/workflows/ios-verify.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  push-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install disposable test tools
+        run: npm install --prefix "$RUNNER_TEMP/piti-test-tools" --no-audit --no-fund @electric-sql/pglite@0.5.8 jsdom@26.1.0
+      - name: Test push and web regressions without live services
+        run: |
+          export PITI_PGLITE_PATH="$RUNNER_TEMP/piti-test-tools/node_modules/@electric-sql/pglite"
+          export PITI_JSDOM_PATH="$RUNNER_TEMP/piti-test-tools/node_modules/jsdom"
+          node --test tests/ios-push.test.mjs
+          node --test tests/staging-bundle.test.mjs tests/managed-account-edge.test.mjs
+          node tests/ios-push-db.cjs
+          node tests/ios-push-preferences.cjs
+          node tests/ios-push-preferences-db.cjs
+          node --test tests/account-deletion-edge.test.mjs
+          node tests/account-deletion-db.cjs
+          node tests/account-deletion-ui.cjs
+          node tests/account-deletion-history-db.cjs
+          node tests/account-deletion-history-ui.cjs
+          node tests/account-deletion-prepare-db.cjs
+          node tests/self-password.cjs
+          node --test tests/registration-username.test.cjs
+          node tests/registration-username-db.cjs
+          node --test tests/recovery-mfa.test.cjs tests/recovery-modal-layer.test.cjs tests/recovery-session.test.cjs
+          node tests/demo-isolation.cjs
+          node tests/offline-guard.cjs
+  simulator-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate --spec ios/project.yml
+      - name: Compile without signing or distribution
+        run: |
+          xcodebuild -project ios/PiTi.xcodeproj -scheme PiTi-Staging -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Check staging settings and APNs environment
+        run: |
+          xcodebuild -project ios/PiTi.xcodeproj -scheme PiTi-Staging -configuration Staging -showBuildSettings -json | python3 -c 'import json,sys; s=json.load(sys.stdin)[0]["buildSettings"]; assert s["PRODUCT_BUNDLE_IDENTIFIER"]=="online.mypiti.app.staging"; assert s["PITI_ENVIRONMENT"]=="staging"; assert s["PITI_APNS_ENVIRONMENT"]=="production"; assert s["APS_ENVIRONMENT"]=="production"; assert not s.get("PITI_BASE_URL", "").strip()'
+      - name: Verify production configuration compiles
+        run: |
+          xcodebuild -project ios/PiTi.xcodeproj -scheme PiTi -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

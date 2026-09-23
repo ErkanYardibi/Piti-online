@@ -72,6 +72,6 @@ try{
  w.testRun('state.archiveViews.messages=true');assert.equal(w.testRun('selectedChatCustomer().id'),w.testRun('state.customer.id'));
  w.testRun("state.page='finance';state.financeCustomerId=state.customer.id;finance()");
  assert.notEqual(w.testRun('financeAccount().customer.id'),w.testRun('state.customer.id'));
- w.testRun("financeCustomers().forEach(c=>c.archived=true);finance()");assert.ok(contents().includes('Gösterilecek müşteri yok.'));
+ w.testRun("financeCustomers().forEach(c=>c.archived=true);finance()");assert.ok(contents().includes('Gösterilecek öğrenci yok.'));
  assert.deepEqual(errors,[]);console.log('PASS: archive filtering for calendar, home, requests, payments, tasks, leave, chat and finance; explicit archive views and history preservation');
 }finally{dom.window.close();}
