@@ -1049,10 +1049,9 @@ function showRecoveryPasswordGate(){
  save.onclick=async()=>{const password=document.querySelector('#recoveryPassword').value,again=document.querySelector('#recoveryPasswordAgain').value;if(password.length<6){error.textContent='Şifre en az 6 karakter olmalı.';return}if(password!==again){error.textContent='Şifreler eşleşmiyor.';return}save.disabled=true;save.textContent='Kaydediliyor…';try{const {error:err}=await db.auth.updateUser({password});if(err)throw err;sessionStorage.removeItem('pitiRecoveryPending');sessionStorage.setItem('pitiResetDone','1');await db.auth.signOut({scope:'local'});location.replace(location.pathname+'?reset=done')}catch(err){error.textContent=err.message||'Şifre güncellenemedi.';save.disabled=false;save.textContent='Şifreyi kaydet'}};
 }
 async function openForgotPassword(){
- const email=window.prompt('Şifre sıfırlama bağlantısının gönderileceği e-posta adresi:','');
- if(email===null)return;
- const value=email.trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(value)){authMessage('Geçerli bir e-posta adresi gir.');return}
- setAuthBusy(true);authMessage('');try{const {error}=await db.auth.resetPasswordForEmail(value,{redirectTo:location.origin+location.pathname+'?passwordReset=1'});if(error)throw error;authMessage('Şifre sıfırlama bağlantısı e-posta adresine gönderildi.')}catch(error){authMessage(error.message||'Şifre sıfırlama e-postası gönderilemedi.')}finally{setAuthBusy(false)}
+ openModal(`<h3>Şifremi unuttum</h3><p class="muted">Şifre sıfırlama bağlantısını gönderebilmemiz için hesabındaki e-posta adresini gir.</p><div class="field"><label for="forgotEmail">E-posta adresi</label><input class="input" id="forgotEmail" type="email" autocomplete="email" required></div><p id="forgotError" class="authError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendPasswordReset">Bağlantı gönder</button></div>`);
+ const send=document.querySelector('#sendPasswordReset'),errorBox=document.querySelector('#forgotError');
+ send.onclick=async()=>{const value=document.querySelector('#forgotEmail').value.trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(value)){errorBox.textContent='Geçerli bir e-posta adresi gir.';return}send.disabled=true;send.textContent='Gönderiliyor…';try{const {error}=await db.auth.resetPasswordForEmail(value,{redirectTo:location.origin+location.pathname+'?passwordReset=1'});if(error)throw error;closeModal();authMessage('Şifre sıfırlama bağlantısı e-posta adresine gönderildi.')}catch(error){errorBox.textContent=error.message||'Şifre sıfırlama e-postası gönderilemedi.';send.disabled=false;send.textContent='Bağlantı gönder'}};
 }
 async function initAuth(){
  let registering=false;
