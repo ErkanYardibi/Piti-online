@@ -204,12 +204,12 @@ button{color:inherit}a{color:var(--blueText)}
 <div class="toast" id="toast"></div>
 <div class="authBack" id="authBack">
  <form class="authCard" id="authForm">
-  <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti<span class="brandConnection" role="status" aria-live="polite">.online</span></div><p class="muted">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
+  <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti<span class="brandConnection" role="status" aria-live="polite">.online</span></div><p class="muted" id="authIntro">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
   <div class="field" id="registrationName" hidden><label for="authName">Ad Soyad</label><input class="input" id="authName" autocomplete="name"></div>
   <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Müşteri</option></select></div>
-  <div class="field"><label for="authEmail">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+  <div class="field"><label for="authEmail" id="authEmailLabel">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
   <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" required></div>
-  <p class="small muted">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan.</p><p class="small"><button class="linkButton" id="forgotPasswordBtn" type="button">Şifremi unuttum</button></p><div class="authError" id="authError" role="alert"></div>
+  <p class="small muted" id="authAccountHelp">Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan.</p><p class="small"><button class="linkButton" id="forgotPasswordBtn" type="button">Şifremi unuttum</button></p><div class="authError" id="authError" role="alert"></div>
   <div class="authActions"><button class="btn primary" id="loginSubmit" type="submit">Giriş Yap</button><button class="btn ghost" type="button" id="signUpBtn">Kayıt Ol</button></div>
  </form>
 </div>
@@ -1119,7 +1119,18 @@ async function initAuth(){
  let registering=false;
  const forgotButton=document.querySelector('#forgotPasswordBtn');
  if(forgotButton){forgotButton.onclick=openForgotPassword;forgotButton.hidden=false;}
- const switchMode=()=>{registering=!registering;document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;document.querySelector('#forgotPasswordBtn').hidden=registering;document.querySelector('#authName').required=registering;document.querySelector('#authEmail').type=registering?'email':'text';document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('')};
+ const switchMode=()=>{
+  registering=!registering;
+  document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;
+  document.querySelector('#forgotPasswordBtn').hidden=registering;document.querySelector('#authName').required=registering;
+  document.querySelector('#authEmail').type=registering?'email':'text';
+  document.querySelector('#authEmail').autocomplete=registering?'email':'username';
+  document.querySelector('#authEmailLabel').textContent=registering?'E-posta adresi *':'Kullanıcı adı veya e-posta';
+  document.querySelector('#authIntro').textContent=registering?'Ad soyad, e-posta adresin ve şifrenle hesap oluştur.':'Kullanıcı adı veya e-posta ve şifrenle giriş yap.';
+  document.querySelector('#authAccountHelp').textContent=registering?'E-posta adresi zorunludur. Şifreni unutursan sıfırlama bağlantısını bu adrese göndereceğiz. Erişebildiğin bir adres kullan.':'Müşteri hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan.';
+  document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';
+  document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('');
+ };
 
  const enterDemo=async()=>{demoMode=true;document.querySelector('#authBack').hidden=true;if(!db)return;setAuthBusy(true);authMessage('Ortak demo verileri yükleniyor…');try{await loadDemoData();authMessage('')}catch(error){demoMode=false;document.querySelector('#authBack').hidden=false;authMessage(error.message||'Demo yüklenemedi. Tekrar dene.')}finally{setAuthBusy(false)}};
  document.querySelector('#authForm').onsubmit=async e=>{
