@@ -13,6 +13,8 @@
 *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text)}
 button,input,select,textarea{font:inherit} button{cursor:pointer}.linkButton{border:0;background:none;color:var(--blue);padding:0;text-decoration:underline;cursor:pointer}
 .brandMark,.authLogo{white-space:nowrap}
+/* Recovery dialogs must appear above the login overlay (z-index:500). */
+.modalBack.authModal{z-index:600}
 .brandPrefix{font-size:.55em;letter-spacing:-.04em;color:var(--green);margin-right:.08em}
 .brandConnection{font-size:.46em;font-weight:650;letter-spacing:-.02em;color:var(--green2);margin-left:.08em}
 .brandConnection.isOffline{color:#a66412}
@@ -2358,7 +2360,7 @@ function memberProfile(){const c=state.customer;view.innerHTML=`<div class="tool
 
 function openAddLocation(){openModal(`<h3>Salon / Lokasyon Ekle</h3><div class="field"><label>Salon adı</label><input class="input" id="locName" placeholder="Örn. FitLife Lara"></div><div class="field"><label>Adres / Bölge</label><input class="input" id="locAddr" placeholder="Lara, Antalya"></div><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="saveLoc">Ekle</button></div>`);modal.querySelector('#saveLoc').onclick=()=>{const n=modal.querySelector('#locName').value.trim();if(!n)return toast('Salon adını gir.');state.ptProfile.locations.push({id:Date.now(),name:n,address:modal.querySelector('#locAddr').value});save();closeModal();toast('Salon eklendi.');ptProfile()}}
 let activeChatRecorderCleanup=null;
-function openModal(html){activeChatRecorderCleanup?.();modal.innerHTML=html;modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){activeChatRecorderCleanup?.();modalBack.classList.remove('show')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
+function openModal(html){activeChatRecorderCleanup?.();modal.innerHTML=html;modalBack.classList.toggle('authModal',!!modal.querySelector('#forgotEmail,#recoveryPasswordModal'));modalBack.classList.add('show');modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal)}function closeModal(){activeChatRecorderCleanup?.();modalBack.classList.remove('show','authModal')}modalBack.onclick=e=>{if(e.target===modalBack)closeModal()}
 function toast(t){const el=document.querySelector('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),2200)}
 function escapeHtml(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 document.querySelector('#avatar').onclick=()=>{if(adminMode){adminTab='profile';adminPage=0;renderAdmin()}else nav('profile')};
