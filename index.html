@@ -1044,11 +1044,49 @@ function recoveryLinkDetected(){
  const params=new URLSearchParams(location.hash.replace(/^#/,''));
  return params.get('type')==='recovery'||new URLSearchParams(location.search).get('passwordReset')==='1';
 }
-function showRecoveryPasswordGate(){
+async function showRecoveryPasswordGate(){
  if(document.querySelector('#recoveryPasswordModal'))return;
- openModal(`<div id="recoveryPasswordModal"><h3>Yeni şifre belirle</h3><p class="muted">Hesabın için yeni bir şifre oluştur.</p><div class="field"><label for="recoveryPassword">Yeni şifre *</label><input class="input" id="recoveryPassword" type="password" minlength="6" autocomplete="new-password" required></div><div class="field"><label for="recoveryPasswordAgain">Yeni şifre (tekrar) *</label><input class="input" id="recoveryPasswordAgain" type="password" minlength="6" autocomplete="new-password" required></div><p id="recoveryError" class="authError" role="alert"></p><div class="modalFoot"><button class="btn primary" id="saveRecoveryPassword">Şifreyi kaydet</button></div></div>`);
+ openModal(`<div id="recoveryPasswordModal"><h3>Yeni şifre belirle</h3><p class="muted">Hesabın için yeni bir şifre oluştur.</p><div class="field"><label for="recoveryPassword">Yeni şifre *</label><input class="input" id="recoveryPassword" type="password" minlength="6" autocomplete="new-password" required></div><div class="field"><label for="recoveryPasswordAgain">Yeni şifre (tekrar) *</label><input class="input" id="recoveryPasswordAgain" type="password" minlength="6" autocomplete="new-password" required></div><div id="recoveryMfaField" hidden><p class="muted" id="recoveryMfaHelp">Hesabında iki aşamalı doğrulama açık. Doğrulama uygulamandaki PiTi için üretilen 6 haneli kodu gir.</p><div class="field"><label for="recoveryMfaCode">Doğrulama kodu *</label><input class="input" id="recoveryMfaCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="recoveryMfaHelp"></div></div><p id="recoveryError" class="authError" role="alert"></p><div class="modalFoot"><button class="btn primary" id="saveRecoveryPassword" disabled>Kontrol ediliyor…</button></div></div>`);
  const save=document.querySelector('#saveRecoveryPassword'),error=document.querySelector('#recoveryError');
- save.onclick=async()=>{const password=document.querySelector('#recoveryPassword').value,again=document.querySelector('#recoveryPasswordAgain').value;if(password.length<6){error.textContent='Şifre en az 6 karakter olmalı.';return}if(password!==again){error.textContent='Şifreler eşleşmiyor.';return}save.disabled=true;save.textContent='Kaydediliyor…';try{const {error:err}=await db.auth.updateUser({password});if(err)throw err;sessionStorage.removeItem('pitiRecoveryPending');sessionStorage.setItem('pitiResetDone','1');await db.auth.signOut({scope:'local'});location.replace(location.pathname+'?reset=done')}catch(err){error.textContent=err.message||'Şifre güncellenemedi.';save.disabled=false;save.textContent='Şifreyi kaydet'}};
+ const mfaField=document.querySelector('#recoveryMfaField'),codeInput=document.querySelector('#recoveryMfaCode');
+ async function checkMfa(){
+  const {data:assurance,error:assuranceError}=await db.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(assuranceError)throw new Error('Doğrulama bilgileri alınamadı. Lütfen tekrar dene.');
+  if(!assurance?.currentLevel)throw new Error('Sıfırlama oturumu sona ermiş. Yeni bir şifre sıfırlama bağlantısı iste.');
+  if(assurance.currentLevel==='aal2'){mfaField.hidden=true;return null}
+  const {data:factors,error:factorError}=await db.auth.mfa.listFactors();
+  if(factorError)throw new Error('Doğrulama bilgileri alınamadı. Lütfen tekrar dene.');
+  const factor=factors.totp.find(f=>f.status==='verified');
+  mfaField.hidden=!factor;
+  if(!factor&&(assurance.nextLevel==='aal2'||factors.all.some(f=>f.status==='verified')))throw new Error('Hesabındaki doğrulama yöntemi bu ekranda desteklenmiyor. Destek ile iletişime geç.');
+  return factor;
+ }
+ save.onclick=async()=>{
+  if(save.disabled)return;
+  error.textContent='';
+  const password=document.querySelector('#recoveryPassword').value,again=document.querySelector('#recoveryPasswordAgain').value;
+  if(password.length<6){error.textContent='Şifre en az 6 karakter olmalı.';return}
+  if(password!==again){error.textContent='Şifreler eşleşmiyor.';return}
+  save.disabled=true;save.textContent='Kaydediliyor…';
+  try{
+   const factor=await checkMfa();
+   if(factor){
+    const code=codeInput.value.trim();
+    if(!/^\d{6}$/.test(code)){codeInput.focus();throw new Error('Doğrulama uygulamandaki 6 haneli kodu gir.')}
+    const {error:verifyError}=await db.auth.mfa.challengeAndVerify({factorId:factor.id,code});
+    codeInput.value='';
+    if(verifyError)throw new Error('Kod doğrulanamadı. Doğrulama uygulamandaki güncel kodla tekrar dene.');
+   }
+   const {error:updateError}=await db.auth.updateUser({password});if(updateError)throw updateError;
+   sessionStorage.setItem('pitiResetDone','1');
+   await db.auth.signOut({scope:'local'});
+   sessionStorage.removeItem('pitiRecoveryPending');
+   location.replace(location.pathname+'?reset=done');
+  }catch(err){error.textContent=err.message||'Şifre güncellenemedi.'}
+  finally{save.disabled=false;save.textContent='Şifreyi kaydet'}
+ };
+ try{await checkMfa()}catch(err){error.textContent=err.message}
+ finally{save.disabled=false;save.textContent='Şifreyi kaydet'}
 }
 async function openForgotPassword(){
  openModal(`<h3>Şifremi unuttum</h3><p class="muted">Şifre sıfırlama bağlantısını gönderebilmemiz için hesabındaki e-posta adresini gir.</p><div class="field"><label for="forgotEmail">E-posta adresi</label><input class="input" id="forgotEmail" type="email" autocomplete="email" required></div><p id="forgotError" class="authError" role="alert"></p><div class="modalFoot"><button class="btn ghost" data-close>Vazgeç</button><button class="btn primary" id="sendPasswordReset">Bağlantı gönder</button></div>`);
@@ -1074,7 +1112,7 @@ async function initAuth(){
  // Supabase calls must run after the auth callback releases its session lock.
  db.auth.onAuthStateChange((event,session)=>{
   if(event==='PASSWORD_RECOVERY'){sessionStorage.setItem('pitiRecoveryPending','1');setTimeout(showRecoveryPasswordGate,0)}
-  else if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);location.reload()}
+  else if(event==='SIGNED_OUT'){sessionStorage.removeItem('pitiLoginMode');authUser=null;clearTimeout(cloudSyncTimer);if(!sessionStorage.getItem('pitiResetDone'))location.reload()}
   else if(session&&!authUser&&!demoMode&&!sessionStorage.getItem('pitiRecoveryPending'))setTimeout(()=>{if(!authUser&&!demoMode&&!sessionStorage.getItem('pitiEntryToken')&&!sessionStorage.getItem('pitiRecoveryPending'))activateSession(session)},0);
  });
  document.querySelector('#signUpBtn').onclick=switchMode;
