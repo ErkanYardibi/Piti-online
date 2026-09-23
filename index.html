@@ -206,6 +206,7 @@ button{color:inherit}a{color:var(--blueText)}
  <form class="authCard" id="authForm">
   <div class="authLogo"><span class="brandPrefix">my</span>P<i>i</i>ti<span class="brandConnection" role="status" aria-live="polite">.online</span></div><p class="muted" id="authIntro">Kullanıcı adı veya e-posta ve şifrenle giriş yap.</p>
   <div class="field" id="registrationName" hidden><label for="authName">Ad Soyad</label><input class="input" id="authName" autocomplete="name"></div>
+  <div class="field" id="registrationUsername" hidden><label for="authUsername">Kullanıcı adı *</label><input class="input" id="authUsername" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="30" aria-describedby="authUsernameHelp" disabled><div class="small muted" id="authUsernameHelp">3–30 karakter; harf, rakam, nokta, alt çizgi veya tire. Türkçe harfler sadeleştirilir; büyük/küçük harf ayrımı yoktur.</div></div>
   <div class="field" id="registrationRole" hidden><label for="authRole">Hesap türü</label><select id="authRole"><option value="pt">PT</option><option value="member">Öğrenci</option></select></div>
   <div class="field"><label for="authEmail" id="authEmailLabel">Kullanıcı adı veya e-posta</label><input class="input" id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
   <div class="field"><label for="authPassword">Şifre</label><input class="input" id="authPassword" type="password" autocomplete="current-password" required></div>
@@ -1009,7 +1010,7 @@ function adminPasswordDialog(id){
 }
 setInterval(async()=>{if(!authUser||demoMode||document.hidden||accountAccess?.must_change_password)return;try{const {error}=await db.rpc('heartbeat');if(error){clearTimeout(cloudSyncTimer);view.innerHTML='';sidebar.innerHTML='';document.getElementById('adminMfaGate')?.remove();document.querySelector('#authBack').hidden=false;authMessage(error.message);authUser=null;adminMode=false}}catch{}},30000);
 
-function setAuthBusy(busy){document.querySelectorAll('#authForm button,#authForm input,#authForm select').forEach(x=>x.disabled=busy)}
+function setAuthBusy(busy){document.querySelectorAll('#authForm button,#authForm input,#authForm select').forEach(x=>x.disabled=busy||(x.id==='authUsername'&&document.querySelector('#registrationUsername').hidden))}
 function authMessage(message){document.querySelector('#authError').textContent=message||''}
 let sessionActivation=null;
 function activateSession(session){
@@ -1119,14 +1120,16 @@ async function initAuth(){
  let registering=false;
  const forgotButton=document.querySelector('#forgotPasswordBtn');
  if(forgotButton){forgotButton.onclick=openForgotPassword;forgotButton.hidden=false;}
+ document.querySelector('#authUsername').onblur=e=>{e.target.value=normalizeLoginName(e.target.value)};
  const switchMode=()=>{
   registering=!registering;
   document.querySelector('#registrationName').hidden=!registering;document.querySelector('#registrationRole').hidden=!registering;
+  document.querySelector('#registrationUsername').hidden=!registering;document.querySelector('#authUsername').required=registering;document.querySelector('#authUsername').disabled=!registering;
   document.querySelector('#forgotPasswordBtn').hidden=registering;document.querySelector('#authName').required=registering;
   document.querySelector('#authEmail').type=registering?'email':'text';
   document.querySelector('#authEmail').autocomplete=registering?'email':'username';
   document.querySelector('#authEmailLabel').textContent=registering?'E-posta adresi *':'Kullanıcı adı veya e-posta';
-  document.querySelector('#authIntro').textContent=registering?'Yeni hesap oluşturmak için ad soyad, e-posta adresi ve şifreni gir.':'Kullanıcı adı veya e-posta ve şifrenle giriş yap.';
+  document.querySelector('#authIntro').textContent=registering?'Yeni hesap oluşturmak için ad soyad, kullanıcı adı, e-posta adresi ve şifreni gir.':'Kullanıcı adı veya e-posta ve şifrenle giriş yap.';
   document.querySelector('#authAccountHelp').textContent=registering?'E-posta adresi zorunludur. Şifreni unutursan sıfırlama bağlantısını bu adrese göndereceğiz. Erişebildiğin bir adres kullan.':'Öğrenci hesabın için PT’nin verdiği bağlantıyı veya geçici şifreyi kullan.';
   document.querySelector('#authPassword').autocomplete=registering?'new-password':'current-password';
   document.querySelector('#loginSubmit').textContent=registering?'Kayıt Ol':'Giriş Yap';document.querySelector('#signUpBtn').textContent=registering?'Girişe dön':'Kayıt Ol';authMessage('');
@@ -1156,10 +1159,26 @@ async function initAuth(){
  });
  document.querySelector('#signUpBtn').onclick=switchMode;
  const registerAccount=async()=>{
-  const email=document.querySelector('#authEmail').value.trim(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value;
+  const email=document.querySelector('#authEmail').value.trim().toLowerCase(),password=document.querySelector('#authPassword').value,name=document.querySelector('#authName').value.trim(),role=document.querySelector('#authRole').value,username=normalizeLoginName(document.querySelector('#authUsername').value);
   if(!name||!/^\S+@\S+\.\S+$/.test(email)||password.length<6)return authMessage('Ad soyad, e-posta ve en az 6 karakterli şifre gerekli.');
+  if(!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username))return authMessage('Kullanıcı adı 3–30 karakter olmalı; harf, rakam, nokta, alt çizgi veya tire kullan.');
+  if(['admin','demo'].includes(username))return authMessage('Bu kullanıcı adı kullanılamaz. Başka bir ad seç.');
+  document.querySelector('#authUsername').value=username;
   setAuthBusy(true);authMessage('');
-  try{sessionStorage.removeItem('pitiLoginMode');localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{full_name:name,account_type:role}}});if(error)throw error;if(data.session)await activateSession(data.session);else authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.')}
+  try{
+   const availability=await db.rpc('registration_username_available',{p_username:username});
+   if(availability.error||typeof availability.data!=='boolean')throw new Error('Kullanıcı adı kontrol edilemedi. Lütfen biraz sonra tekrar dene.');
+   if(!availability.data)throw new Error('Bu kullanıcı adı alınmış. Başka bir ad seç.');
+   sessionStorage.removeItem('pitiLoginMode');localStorage.setItem('pitiPendingProfile',JSON.stringify({name,role}));
+   const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{full_name:name,account_type:role,username}}});
+   if(error){
+    // A concurrent registration can claim the name after the availability check.
+    let taken=false;try{const check=await db.rpc('registration_username_available',{p_username:username});taken=!check.error&&check.data===false}catch{}
+    if(taken)throw new Error('Bu kullanıcı adı alınmış. Başka bir ad seç.');
+    throw error;
+   }
+   if(data.session)await activateSession(data.session);else authMessage('Kayıt oluşturuldu. E-postandaki onay bağlantısını aç, sonra giriş yap.');
+  }
   catch(error){authMessage(error.message)}finally{setAuthBusy(false)}
  };
  if(typeof redeemPendingEntry==='function'&&await redeemPendingEntry())return;
