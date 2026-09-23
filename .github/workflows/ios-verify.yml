@@ -33,7 +33,7 @@ jobs:
           node tests/account-deletion-history-ui.cjs
           node tests/account-deletion-prepare-db.cjs
           node tests/self-password.cjs
-          node --test tests/recovery-mfa.test.cjs tests/recovery-modal-layer.test.cjs
+          node --test tests/recovery-mfa.test.cjs tests/recovery-modal-layer.test.cjs tests/recovery-session.test.cjs
           node tests/demo-isolation.cjs
           node tests/offline-guard.cjs
   simulator-build:

@@ -15,7 +15,7 @@ async function setup(options={}){
   openModal(markup){for(const [,id] of markup.matchAll(/id="([^"]+)"/g))nodes['#'+id]={value:'',textContent:'',hidden:id==='recoveryMfaField',disabled:id==='saveRecoveryPassword',focus(){this.focused=true}}},
   sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
   location:{pathname:'/',replace:url=>calls.push(['replace',url]),reload:()=>calls.push(['reload'])},
-  authUser:null,demoMode:false,cloudSyncTimer:null,clearTimeout(){},setTimeout:fn=>fn(),
+  authUser:null,demoMode:false,recoveryLinkFailed:false,recoveryLinkDetected:()=>false,cloudSyncTimer:null,clearTimeout(){},setTimeout:fn=>fn(),
   activateSession:()=>calls.push(['activate']),
   db:{auth:{
    onAuthStateChange:fn=>{callback=fn},
