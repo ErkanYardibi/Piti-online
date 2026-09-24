@@ -1,16 +1,12 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "piti-online",
-  "main": "worker.js",
+  "name": "piti-staging",
+  "main": "staging-worker.js",
   "compatibility_date": "2026-09-17",
   "workers_dev": true,
-  "preview_urls": true,
-  "observability": {
-    "enabled": true
-  },
   "assets": {
-    "directory": ".",
+    "directory": "./staging-public",
     "binding": "ASSETS",
     "run_worker_first": true
-  }
+  },
+  "preview_urls": false
 }
