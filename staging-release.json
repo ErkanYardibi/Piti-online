@@ -1,9 +1,9 @@
 {
-  "source_commit": "a6862337653b0034cb0f917d3cc19a84caca88b3",
-  "source_tree": "b68457a03e9081ea7b6942b90e10e376d1b2e45a",
+  "source_commit": "c5cf5225a4bb29cd01dd25f977c0c47c82c1958a",
+  "source_tree": "1f17f03a3e89bcd0bcea4e95fb573250e6b52458",
   "worker": "piti-staging",
   "backend": "ldufxzwgwbaogpmwqhlw",
   "status": "published_via_cloudflare_builds",
-  "ui_release": "messages-stickers-2026-09-25",
-  "source_sha256": "1c24df74a2425092e009c236cd0e74ad953d7bc5ebad3190c5576355d315454e"
+  "ui_release": "messages-large-emoji-2026-09-25",
+  "source_sha256": "4ac9692cb3a2911992238e051789568fee56cbbbc9338dc249a42fdcbb86cc00"
 }

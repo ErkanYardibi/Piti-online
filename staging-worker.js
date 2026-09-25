@@ -6,7 +6,7 @@ export default {
   const response = await runtime.fetch(request, env);
   const headers = new Headers(response.headers);
   headers.set('X-PiTi-Environment','staging');
-  headers.set('X-PiTi-Source-Commit','a6862337653b0034cb0f917d3cc19a84caca88b3');
+  headers.set('X-PiTi-Source-Commit','c5cf5225a4bb29cd01dd25f977c0c47c82c1958a');
   headers.set('X-Robots-Tag','noindex, nofollow');
   headers.set('Cache-Control','no-store');
   headers.set('Content-Security-Policy', "connect-src 'self' https://ldufxzwgwbaogpmwqhlw.supabase.co wss://ldufxzwgwbaogpmwqhlw.supabase.co; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'");
