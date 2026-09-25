@@ -1,9 +1,9 @@
 {
-  "source_commit": "4b25c5a5862cf08b956efed41e6e20cec8873478",
-  "source_tree": "8fd6bf63440d2050cb808fb1724047c0196c6ddb",
+  "source_commit": "9d6650ced7096fc78accb7f849b183b21f94cab3",
+  "source_tree": "9920ab1012cdf5ab1ebf82e0a3f683e9b88492fb",
   "worker": "piti-staging",
   "backend": "ldufxzwgwbaogpmwqhlw",
   "status": "published_via_cloudflare_builds",
-  "ui_release": "messages-2026-09-25",
-  "source_sha256": "b6434e455a487dfe8ef2a05ee16486b3be0e6c23a94a919e89f408669b66bbb3"
+  "ui_release": "messages-fullscreen-2026-09-25",
+  "source_sha256": "522a5046fc34bb34678d6d4592ad1d91cec2333b4ceaf35d48e3b9f4d10266d9"
 }
