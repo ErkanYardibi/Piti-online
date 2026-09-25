@@ -183,6 +183,49 @@ button{color:inherit}a{color:var(--blueText)}
  .homeSessionsTable .status,.homeSessionsTable .lateBadge{white-space:normal;max-width:100%}
  .homeSessionsTable td:last-child{display:flex;gap:8px;flex-wrap:wrap}
 }
+
+/* Conversation viewport: only history scrolls; composer remains in view. */
+body.chatMode{overflow:hidden}
+body.chatMode .app{height:var(--chat-viewport-height,100dvh);min-height:0}
+body.chatMode .shell{height:calc(var(--chat-viewport-height,100dvh) - var(--chat-topbar-height,68px));min-height:0}
+body.chatMode .sidebar{overflow-y:auto;min-height:0}
+#view.chatScreen{display:flex;flex-direction:column;min-height:0;height:100%;padding:16px 24px;overflow:hidden}
+.chatScreen>.toolbar{flex:none;margin:0 0 10px;gap:12px;align-items:center}
+.chatScreen>.toolbar h1{font-size:22px;margin:0}.chatScreen>.toolbar .muted{display:none}
+.chatScreen .chatPage{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;max-width:900px;margin:0 auto;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
+.chatHeader{display:flex;align-items:center;gap:10px;flex:none;padding:10px 14px;border-bottom:1px solid var(--line);position:relative}
+.chatHeader>.field{margin:0;flex:1;min-width:0}.chatHeader select{padding:9px;min-height:42px}
+.chatHeader label[for="chatCustomerSelect"]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.chatHeader .subTitle{font-size:16px;margin:0;flex:1;min-width:0;overflow-wrap:anywhere}.chatHeader:has(select) .subTitle{display:none}
+.chatHeader .archiveToggle{font-size:12px;margin:0}
+.chatRetention{flex:none}.chatRetention summary{cursor:pointer;font-size:20px;padding:8px;list-style:none}.chatRetention summary::-webkit-details-marker{display:none}
+.chatRetention .notice{position:absolute;right:10px;top:calc(100% - 8px);z-index:5;max-width:min(340px,90vw);padding:12px;margin:0;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);font-size:13px}
+.chatScreen #chatBox{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none;padding:12px 16px;background:var(--bg);scroll-behavior:auto}
+.chatScreen .msg{max-width:85%}.chatMessageBody{white-space:pre-wrap}
+.chatDock{flex:none;position:relative;border-top:1px solid var(--line);padding:6px 12px 8px;background:var(--card);z-index:2}
+.chatDock .chatTools{display:flex;flex-wrap:nowrap;gap:4px;margin:0 0 4px}
+.chatIconButton{display:inline-grid;place-items:center;min-width:42px;width:42px;height:42px;padding:9px;border:0;border-radius:50%;background:transparent;color:var(--muted)}
+.chatIconButton:hover,.chatIconButton[aria-expanded="true"]{background:var(--greenSoft);color:var(--green2)}
+.chatIconButton:focus-visible{outline:2px solid var(--green2);outline-offset:1px}
+.chatIconButton svg,.chatFileCard svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.chatDock .composer{margin:0;align-items:flex-end}.chatDock textarea{flex:1;width:100%;min-width:0;resize:none;min-height:44px;max-height:120px;line-height:1.4;padding:11px 13px;border-radius:20px;font-size:16px;overflow-y:auto}
+.chatDock #sendMsg{min-height:44px;border-radius:22px;padding:10px 15px}
+.chatDock .chatTaskCheck{margin:5px 0 0;font-size:12px;line-height:1.2}.chatDock .chatTaskCheck input{width:16px;height:16px}
+.chatDock #chatError{font-size:13px;max-height:48px;overflow:auto;margin:3px 0;color:var(--redText)}
+.chatDock #chatStickers,.chatDock #chatEmojis,.chatDock #chatTaskFields{position:absolute;bottom:100%;left:0;right:0;max-height:min(45dvh,360px);overflow-y:auto;margin:0;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:var(--shadow)}
+.chatDock #chatStickerPreview{margin:4px 0;display:flex;align-items:center;gap:8px}.chatDock #chatStickerPreview .chatSticker{display:flex;padding:4px 8px}.chatDock #chatStickerPreview .chatSticker span{font-size:22px}
+.chatDock .chatMediaDraft{padding:6px 8px;margin:4px 0}.chatDock .chatMediaDraft b{font-size:13px;overflow-wrap:anywhere}
+.chatFileCard{display:flex;align-items:center;gap:10px;text-decoration:none;background:var(--card);border:1px solid var(--line);padding:12px;border-radius:12px;margin:8px 0;color:var(--text)}
+.chatFileCard>span{min-width:0}.chatFileCard b,.chatFileCard small{display:block;overflow-wrap:anywhere}.chatFileCard small{color:var(--muted);margin-top:4px}.chatFileCard svg{flex:none}
+#chatLatest{position:absolute;right:16px;bottom:calc(100% + 12px);box-shadow:var(--shadow);border:1px solid var(--line);background:var(--card);color:var(--green2)}
+#chatOlder{display:block;margin:0 auto 10px;font-size:13px}
+@media(max-width:720px){
+ body.chatMode .shell{height:calc(var(--chat-viewport-height,100dvh) - var(--chat-topbar-height,68px) - 72px - env(safe-area-inset-bottom,0px))}
+ #view.chatScreen{padding:6px 8px}.chatScreen>.toolbar{margin-bottom:6px}.chatScreen>.toolbar h1{font-size:18px}.chatScreen #chatBack{padding:6px 10px;font-size:12px;min-height:32px}
+ .chatScreen .chatPage{border-radius:14px}.chatScreen #chatBox{padding:8px 10px}.chatHeader{padding:5px 8px;gap:4px}.chatDock{padding:4px 8px 6px}.chatDock .chatTools{gap:2px}.chatScreen .msg{max-width:92%}
+}
+@media(max-height:520px){body.chatMode .topbar .tag{display:none}.chatScreen>.toolbar{display:none}.chatHeader{padding-block:2px}.chatDock .chatTools{margin:0}.chatIconButton{height:36px;min-height:36px}}
+
 </style>
 </head>
 <body>
@@ -631,7 +674,7 @@ function currentTaskRows(){return demoMode?demoChatStore().tasks:cloudTasks}
 function activeTaskRows(){return currentTaskRows().filter(t=>!financeCustomers().some(c=>c.archived&&!showArchivedInView()&&String(chatClientId(c))===String(t.client_id)))}
 function chatLegacyMessages(c){return demoMode?(clientAccount(c).messages||[]):(cloudHistoryOriginal[c.dbId]?.messages||[])}
 const cloudChatData={
- messages:id=>db.from('messages').select('id,client_id,sender_id,sender_role,body,created_at,read_at,sticker,message_type,media_path,media_mime,media_size,media_width,media_height,media_duration').eq('client_id',id).order('created_at',{ascending:true}),
+ messages:id=>fetchChatMessages(id),
  tasks:id=>{const q=db.from('tasks').select('*');return (id?q.eq('client_id',id):q).order('due_at')},
  read:(id,ids)=>db.from('messages').update({read_at:new Date().toISOString()}).eq('client_id',id).in('id',ids).is('read_at',null).select('id,read_at'),
  send:payload=>db.from('messages').insert(payload),
@@ -665,14 +708,53 @@ function selectedChatCustomer(){
  if(state.role==='member')return state.customer;
  const list=visibleCustomers();return list.find(c=>String(c.id)===String(state.chatCustomerId))||list[0]||null;
 }
+
+const chatFileTypes={pdf:'application/pdf',doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',xls:'application/vnd.ms-excel',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',ppt:'application/vnd.ms-powerpoint',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',txt:'text/plain',csv:'text/csv',zip:'application/zip'};
+function chatIcon(name){const paths={"sticker": "<path d=\"M20 13V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8z\"/><path d=\"M13 20v-5a2 2 0 0 1 2-2h5\"/><path d=\"M7 8h.01M13 8h.01M7 12c1.5 2 4.5 2 6 0\"/>", "emoji": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M8 9h.01M16 9h.01M8 14c2 3 6 3 8 0\"/>", "photo": "<path d=\"M8 5l2-2h4l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z\"/><circle cx=\"12\" cy=\"13\" r=\"4\"/>", "audio": "<rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\"/><path d=\"M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8\"/>", "video": "<rect x=\"2\" y=\"5\" width=\"14\" height=\"14\" rx=\"2\"/><path d=\"m16 10 6-4v12l-6-4\"/>", "file": "<path d=\"m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9a7 7 0 0 1 10 10l-9 9\"/>", "down": "<path d=\"M12 4v16m-6-6 6 6 6-6\"/>"};return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[name]||paths.file}</svg>`}
+function chatTool(id,label,icon,expanded=false){return `<button class="chatIconButton" id="${id}" type="button" aria-label="${label}" title="${label}"${expanded?' aria-expanded="false"':''}>${chatIcon(icon)}</button>`}
+function prepareChatFile(file){
+ const name=String(file?.name||'').replace(/[\/\\\u0000-\u001f\u007f]/g,'_').slice(0,255),ext=name.split('.').pop().toLowerCase(),mime=chatFileTypes[ext];
+ if(!file||!mime)throw Error('PDF, Word, Excel, PowerPoint, TXT, CSV veya ZIP dosyası seç.');
+ if(!file.size||file.size>15*1024*1024)throw Error('Dosya boş olmamalı ve en fazla 15 MB olabilir.');
+ return {blob:file,message_type:'file',mime,name,extension:ext,width:null,height:null,duration:null};
+}
+let chatEarlierRows=[],chatHasEarlier=false,chatHistoryBusy=false;
+async function fetchChatMessages(id,before){
+ let q=db.from('messages').select('id,client_id,sender_id,sender_role,body,created_at,read_at,sticker,message_type,media_path,media_mime,media_size,media_width,media_height,media_duration,media_name').eq('client_id',id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(100);
+ if(before)q=q.or(`created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`);
+ return await q;
+}
+function chatNearBottom(box){return box.scrollHeight-box.clientHeight-box.scrollTop<64}
+function scrollChatLatest(){const box=document.getElementById('chatBox');if(!box)return;box.dataset.followLatest='true';box.dataset.forceLatest='false';box.scrollTop=box.scrollHeight;document.getElementById('chatLatest')?.setAttribute('hidden','');scheduleChatRead()}
+async function loadEarlierChat(){
+ const c=selectedChatCustomer(),clientId=chatClientId(c),actor=chatActorId(),box=document.getElementById('chatBox');
+ if(demoMode||!chatHasEarlier||chatHistoryBusy||!box||!chatRows.length)return;
+ chatHistoryBusy=true;const button=document.getElementById('chatOlder');if(button){button.disabled=true;button.textContent='Yükleniyor…'}
+ try{const {data,error}=await fetchChatMessages(clientId,chatRows[0]);if(error)throw error;if(!box.isConnected||actor!==chatActorId()||clientId!==chatClientId(selectedChatCustomer()))return;chatHasEarlier=(data||[]).length===100;chatEarlierRows=[...(data||[]),...chatRows];await refreshLiveChat();}
+ catch(e){if(box.isConnected)document.getElementById('chatError').textContent='Eski mesajlar yüklenemedi: '+e.message}
+ finally{chatHistoryBusy=false;const current=document.getElementById('chatOlder');if(current){current.disabled=false;current.textContent='Önceki mesajları yükle'}}
+}
+function syncChatViewport(){
+ const active=state.page==='messages'&&!!document.querySelector('.chatPage');document.body.classList.toggle('chatMode',active);view.classList.toggle('chatScreen',active);if(!active)return;
+ const box=document.getElementById('chatBox'),follow=box?.dataset.followLatest!=='false';
+ document.documentElement.style.setProperty('--chat-viewport-height',(window.visualViewport?.height||window.innerHeight)+'px');
+ document.documentElement.style.setProperty('--chat-topbar-height',(document.querySelector('.topbar')?.getBoundingClientRect().height||68)+'px');
+ if(follow&&box)requestAnimationFrame(()=>{if(box.isConnected)box.scrollTop=box.scrollHeight});
+}
+function resizeChatInput(){const input=document.getElementById('msgInput');if(!input)return;input.style.height='auto';input.style.height=Math.min(120,Math.max(44,input.scrollHeight))+'px';syncChatViewport()}
+
 function liveMessages(){
+ chatEarlierRows=[];chatHasEarlier=false;chatHistoryBusy=false;
  const c=selectedChatCustomer();if(c)state.chatCustomerId=c.id;
  const choices=state.role==='pt'?`<div class="field"><label for="chatCustomerSelect">Yazışılacak öğrenci</label><select id="chatCustomerSelect">${visibleCustomers().map(x=>`<option value="${escapeHtml(String(x.id))}" ${c&&String(x.id)===String(c.id)?'selected':''}>${escapeHtml(x.name)}${x.archived?' (Arşiv)':''}</option>`).join('')}</select></div>`:'';
  const available=c&&!c.relationshipEndedAt&&(demoMode||state.role==='pt'||c.ptId);
- view.innerHTML=`<div class="toolbar"><button type="button" class="btn ghost" id="chatBack">‹ Ana Sayfaya Dön</button><div><h1>Mesajlar</h1><div class="muted">${state.role==='pt'?'Seçtiğin öğrenciyle özel yazışma.':'Yalnızca kendi PT’inle yazışabilirsin.'}</div></div></div><div class="chatPage">${archiveViewToggle()}${choices}<h2 class="subTitle">${escapeHtml(state.role==='pt'?(c?.name||'Henüz öğrenci yok'):(state.memberTrainer?.name||'PT’im'))}</h2><p class="notice" id="chatRetentionNotice" role="status">Mesaj saklama süresi yükleniyor…</p><div class="chat" id="chatBox"></div><p id="chatError" role="status"></p>${available?chatComposerHtml():'<p>Yazışmak için önce PT bağlantısı kurulmalı.</p>'}</div>`;
+ view.innerHTML=`<div class="toolbar"><button type="button" class="btn ghost" id="chatBack">‹ Ana Sayfaya Dön</button><div><h1>Mesajlar</h1><div class="muted">${state.role==='pt'?'Seçtiğin öğrenciyle özel yazışma.':'Yalnızca kendi PT’inle yazışabilirsin.'}</div></div></div><div class="chatPage"><div class="chatHeader">${archiveViewToggle()}${choices}<h2 class="subTitle">${escapeHtml(state.role==='pt'?(c?.name||'Henüz öğrenci yok'):(state.memberTrainer?.name||'PT’im'))}</h2><details class="chatRetention"><summary aria-label="Mesaj saklama bilgisi" title="Mesaj saklama bilgisi">ⓘ</summary><p class="notice" id="chatRetentionNotice" role="status">Mesaj saklama süresi yükleniyor…</p></details></div><div class="chat" id="chatBox" tabindex="0" role="region" aria-label="Yazışma geçmişi"></div>${available?chatComposerHtml():'<p>Yazışmak için önce PT bağlantısı kurulmalı.</p>'}</div>`;
  document.getElementById('chatBack').onclick=()=>nav(state.role==='pt'?'dashboard':'today');
  document.getElementById('chatCustomerSelect')?.addEventListener('change',e=>{clearChatMediaDraft();state.chatCustomerId=e.target.value;chatRows=[];liveMessages()});
- document.getElementById('chatBox').addEventListener('scroll',scheduleChatRead,{passive:true});
+ const history=document.getElementById('chatBox');history.dataset.followLatest='true';
+ history.addEventListener('scroll',()=>{const bottom=chatNearBottom(history);history.dataset.followLatest=String(bottom);document.getElementById('chatLatest')?.toggleAttribute('hidden',bottom);scheduleChatRead();if(history.scrollTop<80)loadEarlierChat()},{passive:true});
+ history.addEventListener('load',()=>{if(history.dataset.followLatest!=='false')history.scrollTop=history.scrollHeight;scheduleChatRead()},true);
+ syncChatViewport();
  if(available)bindChatComposer();
  if(c&&chatClientId(c))refreshLiveChat();
 }
@@ -686,16 +768,16 @@ async function refreshLiveChat(){
  const taskResult=await chatData().tasks(clientId);
  if(seq!==chatLoadSequence||state.page!=='messages'||chatClientId(selectedChatCustomer())!==clientId||chatActorId()!==actor)return;
  if(taskResult.error){if(errorBox)errorBox.textContent='Görevler yüklenemedi: '+taskResult.error.message;return}
- chatTaskRows=taskResult.data||[];chatRows=(data||[]).filter(m=>!policy||!chatExpired(m,policy));await hydrateChatMedia(chatRows);if(seq!==chatLoadSequence||state.page!=='messages'||chatActorId()!==actor||chatClientId(selectedChatCustomer())!==clientId)return;const notice=document.getElementById('chatRetentionNotice');if(notice)notice.textContent=policy?`Mesaj kayıtları gönderildikten ${policy.days} gün sonra, görev fotoğrafları ise yüklendikten ${policy.days} gün sonra otomatik silinir. Temizlik saatte bir yapılır. Görev sonuçları ve ölçümler korunur.`:'Saklama süresi şu anda alınamadı. Yeniden denenecek.';const box=document.getElementById('chatBox');if(!box)return;
- const pageScroller=document.scrollingElement||document.documentElement;
- const atBottom=pageScroller.scrollHeight-window.scrollY-window.innerHeight<140;
- const wasEmpty=!box.dataset.renderedHtml;
- const lastMessageId=chatRows.at(-1)?.id||'';
- const newMessage=box.dataset.lastMessageId!==lastMessageId;
+ chatTaskRows=taskResult.data||[];if(!demoMode&&!chatEarlierRows.length)chatHasEarlier=(data||[]).length===100;chatRows=Array.from(new Map([...chatEarlierRows,...(data||[])].map(m=>[m.id,m])).values()).filter(m=>!policy||!chatExpired(m,policy)).sort((a,b)=>a.created_at.localeCompare(b.created_at)||String(a.id).localeCompare(String(b.id)));await hydrateChatMedia(chatRows);if(seq!==chatLoadSequence||state.page!=='messages'||chatActorId()!==actor||chatClientId(selectedChatCustomer())!==clientId)return;const notice=document.getElementById('chatRetentionNotice');if(notice)notice.textContent=policy?`Mesaj kayıtları gönderildikten ${policy.days} gün sonra, görev fotoğrafları ise yüklendikten ${policy.days} gün sonra otomatik silinir. Temizlik saatte bir yapılır. Görev sonuçları ve ölçümler korunur.`:'Saklama süresi şu anda alınamadı. Yeniden denenecek.';const box=document.getElementById('chatBox');if(!box)return;
+ const atBottom=box.dataset.followLatest!=='false',wasEmpty=!box.dataset.renderedHtml,forceLatest=box.dataset.forceLatest==='true';
+ const previousTop=box.scrollTop,anchor=Array.from(box.querySelectorAll('[data-chat-message]')).find(el=>el.getBoundingClientRect().bottom>box.getBoundingClientRect().top),anchorId=anchor?.dataset.chatMessage,anchorTop=anchor?.getBoundingClientRect().top;
  const legacy=chatLegacyMessages(c).filter(m=>!policy||!chatExpired(m,policy));
- const html=legacy.map(m=>`<div class="msg ${m.from===state.role?'me':'them'}">${escapeHtml(m.text||'')}<div class="small muted">Önceki yazışma</div></div>`).join('')+chatRows.map(liveChatMessageHtml).join('');
- if(box.dataset.renderedHtml!==html){box.dataset.renderedHtml=html;box.innerHTML=html||'<div class="empty">Henüz mesaj yok.</div>';if(wasEmpty||(atBottom&&newMessage))requestAnimationFrame(()=>{if(box.isConnected&&state.page==='messages')window.scrollTo({top:pageScroller.scrollHeight,behavior:'instant'})})}
- box.dataset.lastMessageId=lastMessageId;
+ const html=(chatHasEarlier?'<button class="btn ghost" type="button" id="chatOlder">Önceki mesajları yükle</button>':'')+legacy.map(m=>`<div class="msg chatMessageBody ${m.from===state.role?'me':'them'}">${escapeHtml(m.text||'')}<div class="small muted">Önceki yazışma</div></div>`).join('')+chatRows.map(liveChatMessageHtml).join('');
+ if(box.dataset.renderedHtml!==html){box.dataset.renderedHtml=html;box.innerHTML=html||'<div class="empty">Henüz mesaj yok.</div>';
+  if(wasEmpty||atBottom||forceLatest){box.dataset.followLatest='true';box.scrollTop=box.scrollHeight;requestAnimationFrame(()=>{if(box.isConnected&&box.dataset.followLatest!=='false')box.scrollTop=box.scrollHeight})}
+  else {const replacement=Array.from(box.querySelectorAll('[data-chat-message]')).find(el=>el.dataset.chatMessage===anchorId);box.scrollTop=replacement?previousTop+replacement.getBoundingClientRect().top-anchorTop:previousTop}
+ }
+ box.dataset.forceLatest='false';document.getElementById('chatOlder')?.addEventListener('click',loadEarlierChat);document.getElementById('chatLatest')?.toggleAttribute('hidden',box.dataset.followLatest!=='false');
  bindChatTasks();
  if(errorBox&&!chatSending&&/^(Mesajlar|Görevler) yüklenemedi:/.test(errorBox.textContent))errorBox.textContent='';
  scheduleChatRead();
@@ -707,7 +789,7 @@ const chatMediaUrls=new Map();
 function stickerHtml(id){const s=chatStickers.find(x=>x.id===id);return s?`<div class="chatSticker"><span aria-hidden="true">${s.emoji}</span><b>${s.label}</b></div>`:''}
 function taskDateInput(){const d=new Date(Date.now()+3600000);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
 function taskFieldsHtml(prefix){return `<div class="taskFields"><div class="field"><label for="${prefix}Due">Son tarih ve saat</label><input class="input" id="${prefix}Due" type="datetime-local" value="${taskDateInput()}" required></div><div class="field"><label for="${prefix}Type">Yanıt türü</label><select id="${prefix}Type"><option value="done">Tamamladım</option><option value="kg">Kilo gir (kg)</option><option value="litre">Miktar gir (litre)</option><option value="photo">Fotoğraf gönder</option></select></div></div>`}
-function chatComposerHtml(){return `<div class="chatTools">${state.role==='pt'?'<button class="btn ghost" id="chatStickerToggle" aria-expanded="false">💧 Sticker</button>':''}<button class="btn ghost" id="chatEmojiToggle" aria-expanded="false">😊 Emoji</button><button class="btn ghost" id="chatPhotoButton" type="button">📷 Fotoğraf</button><button class="btn ghost" id="chatAudioButton" type="button">🎙️ Ses</button><button class="btn ghost" id="chatVideoButton" type="button">🎥 Video</button><input hidden type="file" id="chatPhotoInput" accept="image/*"><input hidden type="file" id="chatVideoInput" accept="video/mp4,video/webm,video/quicktime"></div><div class="chatStickerPicker" id="chatStickers" hidden>${(state.role==='pt'?chatStickers:[]).map(s=>`<button class="btn ghost" data-sticker="${s.id}" aria-pressed="false">${stickerHtml(s.id)}</button>`).join('')}</div><div class="emojiPicker" id="chatEmojis" hidden></div><div id="chatStickerPreview" hidden></div><div id="chatMediaDraft" hidden></div><div class="composer"><input class="input" id="msgInput" maxlength="4000" autocomplete="off" aria-label="${state.role==='pt'?'Mesaj veya görev açıklaması':'Mesaj'}" placeholder="${state.role==='pt'?'Mesaj yaz veya sticker seç…':'Mesaj yaz…'}"><button class="btn primary" id="sendMsg">Gönder</button></div>${state.role==='pt'?`<label class="chatTaskCheck"><input type="checkbox" id="chatAsTask"> Görev olarak ata</label><div id="chatTaskFields" hidden>${taskFieldsHtml('chat')}</div>`:''}`}
+function chatComposerHtml(){return `<div class="chatDock"><button id="chatLatest" class="chatIconButton" type="button" aria-label="Son mesaja git" title="Son mesaja git" hidden>${chatIcon('down')}</button><div class="chatTools">${state.role==='pt'?chatTool('chatStickerToggle','Sticker','sticker',true):''}${chatTool('chatEmojiToggle','Emoji','emoji',true)}${chatTool('chatPhotoButton','Fotoğraf','photo')}${chatTool('chatAudioButton','Ses','audio')}${chatTool('chatVideoButton','Video','video')}${chatTool('chatFileButton','Dosya ekle','file')}<input hidden type="file" id="chatFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"><input hidden type="file" id="chatPhotoInput" accept="image/*"><input hidden type="file" id="chatVideoInput" accept="video/mp4,video/webm,video/quicktime"></div><div class="chatStickerPicker" id="chatStickers" hidden>${(state.role==='pt'?chatStickers:[]).map(s=>`<button class="btn ghost" data-sticker="${s.id}" aria-pressed="false">${stickerHtml(s.id)}</button>`).join('')}</div><div class="emojiPicker" id="chatEmojis" hidden></div><div id="chatStickerPreview" hidden></div><div id="chatMediaDraft" hidden></div><p id="chatError" role="status"></p><div class="composer"><textarea rows="1" class="input" id="msgInput" maxlength="4000" autocomplete="off" aria-label="${state.role==='pt'?'Mesaj veya görev açıklaması':'Mesaj'}" placeholder="${state.role==='pt'?'Mesaj yaz veya sticker seç…':'Mesaj yaz…'}"></textarea><button class="btn primary" id="sendMsg">Gönder</button></div>${state.role==='pt'?`<label class="chatTaskCheck"><input type="checkbox" id="chatAsTask"> Görev olarak ata</label><div id="chatTaskFields" hidden>${taskFieldsHtml('chat')}</div>`:''}</div>`}
 let emojiLibraryPromise;
 const emojiCategories=['Yüzler ve duygular','İnsanlar ve vücut','Bileşenler','Hayvanlar ve doğa','Yiyecek ve içecek','Seyahat ve yerler','Aktiviteler','Nesneler','Semboller','Bayraklar'];
 function emojiSearchKey(value){return String(value).toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i')}
@@ -734,6 +816,7 @@ function chatMediaHtml(m,url){
  if(!m.media_path&&!m.media_url)return '';
  if(!url)return '<div class="small muted">Medya hazırlanıyor…</div>';
  const safe=escapeHtml(url),kind=m.message_type||'image';
+ if(kind==='file'){const name=m.media_name||'Dosya',href=url+(url.includes('?')?'&':'?')+'download='+encodeURIComponent(name);return `<a class="chatFileCard" href="${escapeHtml(href)}" download="${escapeHtml(name)}" target="_blank" rel="noopener noreferrer">${chatIcon('file')}<span><b>${escapeHtml(name)}</b><small>${mediaSize(m.media_size||0)} · İndir</small></span></a>`}
  if(kind==='image')return `<img class="chatMedia image" src="${safe}" alt="Sohbette gönderilen fotoğraf" loading="lazy">`;
  if(kind==='video')return `<video class="chatMedia video" src="${safe}" controls playsinline preload="metadata"></video>`;
  if(kind==='audio')return `<audio class="chatMedia audio" src="${safe}" controls preload="metadata"></audio>`;
@@ -751,8 +834,8 @@ function setChatMediaDraft(draft){clearChatMediaDraft();chatMediaDraft={...draft
 function updateChatMediaDraft(){
  const panel=document.getElementById('chatMediaDraft');if(!panel)return;panel.hidden=!chatMediaDraft;
  if(!chatMediaDraft){panel.innerHTML='';return}
- const d=chatMediaDraft,label=d.message_type==='image'?'Fotoğraf':d.message_type==='video'?'Video':'Ses kaydı',detail=[mediaSize(d.blob.size),d.duration?mediaTime(d.duration):'',d.width&&d.height?`${d.width}×${d.height}`:''].filter(Boolean).join(' · ');
- panel.className='chatMediaDraft';panel.innerHTML=`<div><b>${label} hazır</b><span>${escapeHtml(detail)}</span></div><button class="btn ghost sm" id="removeChatMedia" type="button">Kaldır</button>`;panel.querySelector('#removeChatMedia').onclick=clearChatMediaDraft;
+ const d=chatMediaDraft,label=d.message_type==='file'?d.name:d.message_type==='image'?'Fotoğraf':d.message_type==='video'?'Video':'Ses kaydı',detail=[mediaSize(d.blob.size),d.duration?mediaTime(d.duration):'',d.width&&d.height?`${d.width}×${d.height}`:''].filter(Boolean).join(' · ');
+ panel.className='chatMediaDraft';panel.innerHTML=`<div><b>${escapeHtml(label)} hazır</b><span>${escapeHtml(detail)}</span></div><button class="btn ghost sm" id="removeChatMedia" type="button">Kaldır</button>`;panel.querySelector('#removeChatMedia').onclick=clearChatMediaDraft;
 }
 async function prepareChatDraft(factory){
  const error=document.getElementById('chatError'),tools=view.querySelectorAll('.chatTools button');tools.forEach(b=>b.disabled=true);if(error)error.textContent='Medya hazırlanıyor…';
@@ -796,22 +879,26 @@ function openChatRecorder(kind){
 function bindChatComposer(){
  chatSticker=null;chatDraftId=null;
  updateChatMediaDraft();
- for(const name of ['Sticker','Emoji'])document.getElementById('chat'+name+'Toggle')?.addEventListener('click',()=>{const p=document.getElementById(name==='Sticker'?'chatStickers':'chatEmojis');p.hidden=!p.hidden;document.getElementById('chat'+name+'Toggle').setAttribute('aria-expanded',String(!p.hidden))});
+ for(const name of ['Sticker','Emoji'])document.getElementById('chat'+name+'Toggle')?.addEventListener('click',()=>{const p=document.getElementById(name==='Sticker'?'chatStickers':'chatEmojis');p.hidden=!p.hidden;if(!p.hidden){for(const id of ['chatStickers','chatEmojis','chatTaskFields']){const other=document.getElementById(id);if(other&&other!==p)other.hidden=true}for(const other of ['Sticker','Emoji'])if(other!==name)document.getElementById('chat'+other+'Toggle')?.setAttribute('aria-expanded','false')}document.getElementById('chat'+name+'Toggle').setAttribute('aria-expanded',String(!p.hidden))});
  view.querySelectorAll('[data-sticker]').forEach(b=>b.onclick=()=>{chatSticker=b.dataset.sticker;updateChatSticker();const type=document.getElementById('chatType');if(type)type.value=chatStickers.find(s=>s.id===chatSticker).type});
  document.getElementById('chatEmojiToggle').addEventListener('click',()=>{const p=document.getElementById('chatEmojis');if(!p.hidden&&!p.dataset.ready)loadEmojiPicker(p)});
- document.getElementById('chatAsTask')?.addEventListener('change',e=>{document.getElementById('chatTaskFields').hidden=!e.target.checked;document.getElementById('sendMsg').textContent=e.target.checked?'Görevi gönder':'Gönder'});
+ document.getElementById('chatAsTask')?.addEventListener('change',e=>{document.getElementById('chatTaskFields').hidden=!e.target.checked;if(e.target.checked){document.getElementById('chatStickers').hidden=true;document.getElementById('chatEmojis').hidden=true;for(const kind of ['Sticker','Emoji'])document.getElementById('chat'+kind+'Toggle')?.setAttribute('aria-expanded','false')}document.getElementById('sendMsg').textContent=e.target.checked?'Görevi gönder':'Gönder'});
  document.getElementById('chatPhotoButton').onclick=()=>document.getElementById('chatPhotoInput').click();
  document.getElementById('chatVideoButton').onclick=()=>openChatRecorder('video');
  document.getElementById('chatAudioButton').onclick=()=>openChatRecorder('audio');
  document.getElementById('chatPhotoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;await prepareChatDraft(()=>prepareChatPhoto(file));e.target.value=''};
  document.getElementById('chatVideoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;await prepareChatDraft(()=>prepareChatVideo(file));e.target.value=''};
  document.getElementById('chatVideoButton').oncontextmenu=e=>{e.preventDefault();document.getElementById('chatVideoInput').click()};
+ document.getElementById('chatFileButton').onclick=()=>document.getElementById('chatFileInput').click();
+ document.getElementById('chatFileInput').onchange=async e=>{const file=e.target.files?.[0];if(file)await prepareChatDraft(()=>prepareChatFile(file));e.target.value=''};
+ document.getElementById('chatLatest').onclick=scrollChatLatest;
+ document.getElementById('msgInput').oninput=resizeChatInput;
  document.getElementById('sendMsg').onclick=sendLiveMessage;
- document.getElementById('msgInput').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();sendLiveMessage()}};
+ document.getElementById('msgInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendLiveMessage()}};
 }
 function updateChatSticker(){const p=document.getElementById('chatStickerPreview');p.hidden=!chatSticker;p.innerHTML=chatSticker?stickerHtml(chatSticker)+'<button class="btn sm ghost" id="clearChatSticker">Sticker’ı kaldır</button>':'';document.getElementById('clearChatSticker')?.addEventListener('click',()=>{chatSticker=null;updateChatSticker()});view.querySelectorAll('[data-sticker]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sticker===chatSticker)))}
 function taskStatusHtml(t){const done=t.status==='done',late=!done&&t.due_at&&new Date(t.due_at)<new Date();return `<div class="chatTaskStatus"><span class="status ${done?'green':late?'amber':'gray'}">${done?'✓ Tamamlandı':late?'⏳ Gecikti':'◷ Bekliyor'}</span><div>Son tarih: ${t.due_at?new Date(t.due_at).toLocaleString('tr-TR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'Belirtilmedi'}</div>${done?`<div>${escapeHtml(t.result||'Tamamlandı')}${t.response_type==='kg'?' kg':t.response_type==='litre'?' litre':''}</div>`:''}${t.photo_expired_at?'<div class="small muted">Fotoğraf saklama süresi dolduğu için silindi.</div>':''}${t.result_photo&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(t.result_photo)?`<img class="taskPhoto" alt="Görev sonucu fotoğrafı" src="${t.result_photo}">`:''}</div>`}
-function liveChatMessageHtml(m){const t=chatTaskRows.find(t=>t.message_id===m.id),url=m.media_url||chatMediaUrls.get(m.media_path)?.url;return `<div data-chat-message="${escapeHtml(m.id)}" class="msg ${m.sender_id===chatActorId()?'me':'them'}">${t?'<div class="chatTaskLabel">GÖREV</div>':''}${stickerHtml(m.sticker)}${m.body?`<div>${escapeHtml(m.body)}</div>`:''}${chatMediaHtml(m,url)}${t?taskStatusHtml(t):''}${t&&t.status!=='done'&&state.role==='member'?`<button class="btn primary sm" data-complete-task="${t.id}">${t.response_type==='done'?'Tamamladım':'Sonucu gir'}</button>`:!t&&state.role==='pt'&&m.sender_id===chatActorId()&&!m.media_path&&!m.media_url?`<button class="btn ghost sm" data-convert-task="${m.id}">Göreve dönüştür</button>`:''}<div class="small muted">${new Date(m.created_at).toLocaleString('tr-TR')}${m.sender_id===chatActorId()?` · <span class="${m.read_at?'chatRead':'chatSent'}" ${m.read_at?`title="${escapeHtml(new Date(m.read_at).toLocaleString('tr-TR'))}"`:''}>${m.read_at?'✓✓ Okundu':'✓ Gönderildi'}</span>`:''}</div></div>`}
+function liveChatMessageHtml(m){const t=chatTaskRows.find(t=>t.message_id===m.id),url=m.media_url||chatMediaUrls.get(m.media_path)?.url;return `<div data-chat-message="${escapeHtml(m.id)}" class="msg ${m.sender_id===chatActorId()?'me':'them'}">${t?'<div class="chatTaskLabel">GÖREV</div>':''}${stickerHtml(m.sticker)}${m.body?`<div class="chatMessageBody">${escapeHtml(m.body)}</div>`:''}${chatMediaHtml(m,url)}${t?taskStatusHtml(t):''}${t&&t.status!=='done'&&state.role==='member'?`<button class="btn primary sm" data-complete-task="${t.id}">${t.response_type==='done'?'Tamamladım':'Sonucu gir'}</button>`:!t&&state.role==='pt'&&m.sender_id===chatActorId()&&!m.media_path&&!m.media_url?`<button class="btn ghost sm" data-convert-task="${m.id}">Göreve dönüştür</button>`:''}<div class="small muted">${new Date(m.created_at).toLocaleString('tr-TR')}${m.sender_id===chatActorId()?` · <span class="${m.read_at?'chatRead':'chatSent'}" ${m.read_at?`title="${escapeHtml(new Date(m.read_at).toLocaleString('tr-TR'))}"`:''}>${m.read_at?'✓✓ Okundu':'✓ Gönderildi'}</span>`:''}</div></div>`}
 function bindChatTasks(){view.querySelectorAll('[data-complete-task]').forEach(b=>b.onclick=()=>openCompleteTask(b.dataset.completeTask));view.querySelectorAll('[data-convert-task]').forEach(b=>b.onclick=()=>openConvertTask(b.dataset.convertTask))}
 async function loadLiveTasks(){if(!authUser&&!demoMode)return;const owner=chatActorId(),seq=++taskLoadSequence;if(taskOwner!==owner){cloudTasks=[];taskOwner=owner}const {data,error}=await chatData().tasks();if(chatActorId()!==owner||seq!==taskLoadSequence)return;if(error){taskLoadError='Görevler yüklenemedi. Sayfayı yenileyerek tekrar dene.';if(state.page==='progress'&&!adminMode)progress();return}taskLoadError='';cloudTasks=data||[];updateLiveTaskWidgets();if(state.page==='progress'&&!adminMode)progress()}
 function updateLiveTaskWidgets(){if(!authUser&&!demoMode)return;const counter=view.querySelector('[data-home-action="tasks"] .kpiVal');if(counter)counter.textContent=taskLoadError?'—':overdueTasks().length;const panel=document.getElementById('liveMemberTasks');if(panel){panel.innerHTML=memberTasksHtml();panel.querySelectorAll('[data-open-task-chat]').forEach(b=>b.onclick=()=>nav('messages'))}}
@@ -883,13 +970,13 @@ async function sendLiveMessage(){
  let uploadedPath=null;
  try{
   const payload={id:chatDraftId,client_id:clientId,sender_id:chatActorId(),body:text||null,sticker:sticker||null,message_type:media?.message_type||'text'};
-  if(media){if(demoMode){payload.media_url=media.preview_url;chatMediaDraft={...media,preview_url:null}}else{uploadedPath=await uploadChatMedia(media,clientId,chatDraftId);Object.assign(payload,{media_path:uploadedPath,media_mime:media.mime,media_size:media.blob.size,media_width:media.width||null,media_height:media.height||null,media_duration:media.duration?Math.round(media.duration*10)/10:null})}}
+  if(media){if(demoMode){payload.media_url=media.preview_url;Object.assign(payload,{media_name:media.name||null,media_mime:media.mime,media_size:media.blob.size});chatMediaDraft={...media,preview_url:null}}else{uploadedPath=await uploadChatMedia(media,clientId,chatDraftId);Object.assign(payload,{media_path:uploadedPath,media_name:media.name||null,media_mime:media.mime,media_size:media.blob.size,media_width:media.width||null,media_height:media.height||null,media_duration:media.duration?Math.round(media.duration*10)/10:null})}}
   if(chatActorId()!==actor)throw Error('Hesap değişti. Gönderim iptal edildi.');
   const {error}=task?await chatData().assign({p_client_id:clientId,p_message_id:chatDraftId,p_body:text,p_sticker:sticker||null,p_due_at:due.toISOString(),p_response_type:document.getElementById('chatType').value,p_create_message:true}):await chatData().send(payload);if(error&&!(error.code==='23505'&&!task))throw error;
-  if(chatClientId(selectedChatCustomer())===clientId&&input.isConnected){input.value='';chatSticker=null;chatDraftId=null;clearChatMediaDraft();updateChatSticker();const check=document.getElementById('chatAsTask');if(check){check.checked=false;document.getElementById('chatTaskFields').hidden=true;button.textContent='Gönder'}await Promise.all([refreshLiveChat(),loadLiveTasks()]);input.focus({preventScroll:true});syncMessageKeyboard()}
+  if(chatClientId(selectedChatCustomer())===clientId&&input.isConnected){input.value='';resizeChatInput();document.getElementById('chatBox').dataset.forceLatest='true';chatSticker=null;chatDraftId=null;clearChatMediaDraft();updateChatSticker();const check=document.getElementById('chatAsTask');if(check){check.checked=false;document.getElementById('chatTaskFields').hidden=true;button.textContent='Gönder'}await Promise.all([refreshLiveChat(),loadLiveTasks()]);input.focus({preventScroll:true});syncMessageKeyboard()}
  }catch(e){const target=document.getElementById('chatError');if(target)target.textContent='Gönderilemedi: '+e.message}finally{chatSending=false;if(button)button.disabled=false}
 }
-async function uploadChatMedia(draft,clientId,messageId){const ext=mediaExtension(draft.mime,draft.message_type),path=`${clientId}/${messageId}/${draft.message_type}.${ext}`,result=await db.storage.from('chat-media').upload(path,draft.blob,{contentType:draft.mime,cacheControl:'3600',upsert:false});if(result.error){if(String(result.error.statusCode)!=='409')throw result.error;return path;}return result.data.path}
+async function uploadChatMedia(draft,clientId,messageId){const ext=draft.extension||mediaExtension(draft.mime,draft.message_type),path=`${clientId}/${messageId}/${draft.message_type}.${ext}`,result=await db.storage.from('chat-media').upload(path,draft.blob,{contentType:draft.mime,cacheControl:'3600',upsert:false});if(result.error){if(String(result.error.statusCode)!=='409')throw result.error;return path;}return result.data.path}
 
 setInterval(()=>{if(authUser&&!demoMode&&!adminMode&&!document.hidden&&!document.getElementById('passwordGate'))loadLiveTasks().catch(()=>{})},15000);
 captureEntryLink();
@@ -1225,7 +1312,7 @@ function navIcon(name){const p={info:'<circle cx="12" cy="12" r="9"/><path d="M1
 function setRole(role){if(authUser&&!demoMode)return toast('Hesap türün kayıtlı rolüne bağlıdır.');if(role==='member'){state.role='member';state.page='today';state.financeCustomerId=state.customer.id;closeModal();save();render();return;}state.role='pt';state.page='dashboard';state.testPrimaryId=state.customer.id;closeModal();save();render()}
 function nav(page){if(state.page==='messages'&&page!=='messages'){document.activeElement?.blur();document.body.classList.remove('messageTyping');document.documentElement.style.setProperty('--keyboard-bottom','0px');clearChatMediaDraft();}if(demoMode&&state.role==='pt'&&state.testPrimaryId&&String(state.customer.id)!==String(state.testPrimaryId)&&page!=='messages')return switchTestUser(state.testPrimaryId,'pt',page);state.page=page;save();render();refreshSessionRequests();if(page==='calendar'&&authUser&&!demoMode&&state.role==='member'&&navigator.onLine!==false)refreshTrainerCalendar()}
 function renderNav(){const items=orderedNav(); sidebar.innerHTML=items.map(([p,i,t])=>`<button class="navBtn ${state.page===p?'active':''}" data-nav="${p}"><span class="navIcon">${navIcon(i)}</span><span class="navText">${t}${p==='messages'&&((state.unread||{})[state.role]||0)?' <span class=\"badge\">'+state.unread[state.role]+'</span>':''}</span></button>`).join('');sidebar.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));}
-function render(){applyAppearance();if(adminMode)return;if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
+function render(){document.body.classList.toggle('chatMode',state.page==='messages');view.classList.toggle('chatScreen',state.page==='messages');applyAppearance();if(adminMode)return;if(authUser&&!demoMode&&accountAccess?.must_change_password)return showPasswordGate();if(authUser&&!demoMode&&accountAccess?.role)state.role=accountAccess.role;repairDuplicatePTOffEntries();migrateDemoSessions();initTestUsers();renderNav(); document.querySelectorAll('#roleSeg button').forEach(b=>b.classList.toggle('active',b.dataset.role===state.role)); const activeProfile=state.role==='pt'?state.ptProfile:state.customer; avatar.innerHTML=activeProfile.photo?`<img src="${activeProfile.photo}" alt="Profil fotoğrafı">`:profileInitials(activeProfile.name);
  const map={appearance:appearancePage,about:aboutPage,dashboard:dashboard,customers:customers,customerProfile:customerProfile,invites:invites,calendar:calendar,finance:finance,messages:messages,today:memberToday,progress:progress,trainer:trainer,profile:state.role==='pt'?ptProfile:memberProfile}; (map[state.page]||dashboard)();if(state.page==='profile'){const links=document.createElement('div');links.className='rightActions';links.style.marginTop='18px';links.innerHTML='<button class="btn ghost" data-profile-appearance>Görünüm</button><button class="btn ghost" data-profile-about>Hakkında</button>';view.append(links);links.querySelector('[data-profile-appearance]').onclick=()=>nav('appearance');links.querySelector('[data-profile-about]').onclick=()=>nav('about')}renderResultApprovals();renderTestLauncher();renderLeavePanel();renderClientInviteControls();renderUsernameSettings();renderSelfPasswordSettings();if(typeof renderTransferControls==='function')renderTransferControls();if(authUser||demoMode){const h=Array.from(view.querySelectorAll('h2')).find(h=>h.textContent==='Bugünkü Görevler');if(h)h.parentElement.id='liveMemberTasks';updateLiveTaskWidgets();} }
 
 function normalizeAppearance(value){return {theme:['light','dark','system'].includes(value?.theme)?value.theme:'system',background:['default','cream','gray','navy','sage'].includes(value?.background)?value.background:'default'}}
@@ -2322,6 +2409,7 @@ function openTestUsers(){
 }
 
 function syncMessageKeyboard(){
+ syncChatViewport();
  const input=document.querySelector('#msgInput');
  const active=!!input&&document.activeElement===input&&window.matchMedia('(max-width:720px)').matches;
  document.body.classList.toggle('messageTyping',active);const launcher=document.querySelector('#testUserLauncher');if(launcher)launcher.hidden=active;
