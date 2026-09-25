@@ -6,6 +6,7 @@ await new Promise(r=>setTimeout(r,5));
 assert.ok(d.querySelector('#chatStickerToggle'));assert.ok(d.querySelector('#chatAsTask'));
 d.querySelector('[data-sticker="weigh"]').click();d.querySelector('#chatAsTask').checked=true;d.querySelector('#chatAsTask').dispatchEvent(new w.Event('change'));
 await w.testRun('sendLiveMessage()');assert.equal(w.testRun('state.demoChat.tasks.length'),1);assert.equal(w.testRun('state.demoChat.tasks[0].response_type'),'kg');assert.ok(d.querySelector('.chatSticker'));
+assert.ok(d.querySelector('#chatBox .chatTaskHeading'));assert.equal(d.querySelector('#chatBox .chatSticker'),null);assert.ok(d.querySelector('#chatBox .chatTaskCompact .chatTaskDue'));
 const taskId=w.testRun('state.demoChat.tasks[0].id');
 w.testRun("switchTestUser(state.customer.id,'member','messages')");await new Promise(r=>setTimeout(r,5));
 assert.equal(d.querySelector('#chatStickerToggle'),null);assert.equal(d.querySelector('#chatAsTask'),null);assert.ok(d.querySelector('[data-complete-task]'));
@@ -13,6 +14,6 @@ d.querySelector('[data-complete-task]').click();d.querySelector('#taskResultNumb
 assert.equal(w.testRun('state.demoChat.tasks[0].status'),'done');assert.equal(w.testRun('progressMeasurements().filter(x=>x.taskId).length'),1);assert.equal(w.testRun('progressMeasurements().find(x=>x.taskId).w'),81.25);
 w.testRun("state.page='progress';progress()");assert.ok(d.querySelector('#view').textContent.includes('Tartıl görevi'));
 w.testRun("switchTestUser(state.testPrimaryId,'pt','messages')");await new Promise(r=>setTimeout(r,5));assert.ok(d.querySelector('#chatBox').textContent.includes('81.25'));
-d.querySelector('#msgInput').value='Hareket et';await w.testRun('sendLiveMessage()');const buttons=d.querySelectorAll('[data-convert-task]');assert.equal(buttons.length,1);buttons[0].click();await d.querySelector('#convertSave').onclick();assert.equal(w.testRun('state.demoChat.tasks.length'),2);
+d.querySelector('#msgInput').value='Hareket et';await w.testRun('sendLiveMessage()');const buttons=d.querySelectorAll('[data-convert-task]');assert.equal(buttons.length,1);assert.equal(buttons[0].textContent,'');assert.equal(buttons[0].getAttribute('aria-label'),'Göreve dönüştür');buttons[0].click();await d.querySelector('#convertSave').onclick();assert.equal(w.testRun('state.demoChat.tasks.length'),2);
 w.testRun("state.chatCustomerId=state.demoCustomers[0].id;messages()");await new Promise(r=>setTimeout(r,5));assert.ok(!d.querySelector('#chatBox').textContent.includes('81.25'));
 assert.equal(w.demoDbCalls,0);assert.deepEqual(errors,[]);dom.window.close();console.log('PASS: shared demo chat, PT task assignment, member completion, weigh-in progress, conversion, isolation and no production writes');})().catch(e=>{console.error(e);process.exit(1)});
