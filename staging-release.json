@@ -1,7 +1,9 @@
 {
-  "source_commit": "6c54bb85f90c6b261b95f458e532e383bd5c8158",
-  "source_tree": "4e512e96e71f6d16bca11fb140c0ba0fba78c56d",
+  "source_commit": "4b25c5a5862cf08b956efed41e6e20cec8873478",
+  "source_tree": "8fd6bf63440d2050cb808fb1724047c0196c6ddb",
   "worker": "piti-staging",
   "backend": "ldufxzwgwbaogpmwqhlw",
-  "status": "prepared_awaiting_cloudflare_git_connection"
+  "status": "published_via_cloudflare_builds",
+  "ui_release": "messages-2026-09-25",
+  "source_sha256": "b6434e455a487dfe8ef2a05ee16486b3be0e6c23a94a919e89f408669b66bbb3"
 }
